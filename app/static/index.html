@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bhrigu Samhita Jyotisha Lab</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Vedic Astrology Engine</p>
+        <h1>Bhrigu Samhita Jyotisha Lab</h1>
+      </div>
+      <div class="status-pill" id="status">Ready</div>
+    </header>
+
+    <main class="shell">
+      <section class="input-panel" aria-label="Birth details">
+        <form id="birthForm">
+          <label>
+            Name
+            <input name="name" value="Native" autocomplete="name" />
+          </label>
+
+          <div class="field-row">
+            <label>
+              Birth date
+              <input name="date" type="date" required />
+            </label>
+            <label>
+              Birth time
+              <input name="time" type="time" step="1" required />
+            </label>
+          </div>
+
+          <label>
+            Birth place
+            <input name="place" list="places" placeholder="Hyderabad, Telangana, India" autocomplete="off" />
+            <datalist id="places"></datalist>
+          </label>
+
+          <div class="field-row">
+            <label>
+              Latitude
+              <input name="latitude" type="number" step="0.000001" placeholder="optional" />
+            </label>
+            <label>
+              Longitude
+              <input name="longitude" type="number" step="0.000001" placeholder="optional" />
+            </label>
+          </div>
+
+          <label>
+            Timezone
+            <input name="timezone" placeholder="Asia/Kolkata" />
+          </label>
+
+          <button class="primary-button" type="submit">Generate Reading</button>
+        </form>
+
+        <p class="caveat">
+          Spiritual and reflective astrology only. Not medical, legal, financial, or safety advice.
+        </p>
+      </section>
+
+      <section class="report-panel" aria-live="polite">
+        <div id="emptyState" class="empty-state">
+          <div class="glyph">☉</div>
+          <h2>Enter birth details</h2>
+          <p>The report will show chart positions, yogas, life areas, remedies, and upcoming dasha periods.</p>
+        </div>
+        <div id="report" class="report hidden"></div>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
+

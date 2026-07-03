@@ -1,0 +1,27 @@
+[
+  {"name": "Hyderabad, Telangana, India", "aliases": ["Hyderabad", "Secunderabad"], "latitude": 17.385044, "longitude": 78.486671, "timezone": "Asia/Kolkata"},
+  {"name": "Vijayawada, Andhra Pradesh, India", "aliases": ["Vijayawada", "Bezawada"], "latitude": 16.506174, "longitude": 80.648015, "timezone": "Asia/Kolkata"},
+  {"name": "Visakhapatnam, Andhra Pradesh, India", "aliases": ["Vizag", "Visakhapatnam"], "latitude": 17.686816, "longitude": 83.218482, "timezone": "Asia/Kolkata"},
+  {"name": "Chennai, Tamil Nadu, India", "aliases": ["Chennai", "Madras"], "latitude": 13.08268, "longitude": 80.270718, "timezone": "Asia/Kolkata"},
+  {"name": "Bengaluru, Karnataka, India", "aliases": ["Bangalore", "Bengaluru"], "latitude": 12.971599, "longitude": 77.594566, "timezone": "Asia/Kolkata"},
+  {"name": "Mumbai, Maharashtra, India", "aliases": ["Mumbai", "Bombay"], "latitude": 19.075984, "longitude": 72.877656, "timezone": "Asia/Kolkata"},
+  {"name": "New Delhi, India", "aliases": ["Delhi", "New Delhi"], "latitude": 28.613939, "longitude": 77.209021, "timezone": "Asia/Kolkata"},
+  {"name": "Kolkata, West Bengal, India", "aliases": ["Kolkata", "Calcutta"], "latitude": 22.572646, "longitude": 88.363895, "timezone": "Asia/Kolkata"},
+  {"name": "Kochi, Kerala, India", "aliases": ["Cochin", "Kochi"], "latitude": 9.931233, "longitude": 76.267304, "timezone": "Asia/Kolkata"},
+  {"name": "Thiruvananthapuram, Kerala, India", "aliases": ["Trivandrum", "Thiruvananthapuram"], "latitude": 8.524139, "longitude": 76.936638, "timezone": "Asia/Kolkata"},
+  {"name": "Kozhikode, Kerala, India", "aliases": ["Calicut", "Kozhikode"], "latitude": 11.258753, "longitude": 75.780411, "timezone": "Asia/Kolkata"},
+  {"name": "Pune, Maharashtra, India", "aliases": ["Pune"], "latitude": 18.52043, "longitude": 73.856744, "timezone": "Asia/Kolkata"},
+  {"name": "Ahmedabad, Gujarat, India", "aliases": ["Ahmedabad"], "latitude": 23.022505, "longitude": 72.571362, "timezone": "Asia/Kolkata"},
+  {"name": "Jaipur, Rajasthan, India", "aliases": ["Jaipur"], "latitude": 26.912434, "longitude": 75.787271, "timezone": "Asia/Kolkata"},
+  {"name": "Varanasi, Uttar Pradesh, India", "aliases": ["Varanasi", "Benares", "Kashi"], "latitude": 25.317645, "longitude": 82.973914, "timezone": "Asia/Kolkata"},
+  {"name": "Singapore", "aliases": ["Singapore"], "latitude": 1.352083, "longitude": 103.819836, "timezone": "Asia/Singapore"},
+  {"name": "Dubai, United Arab Emirates", "aliases": ["Dubai"], "latitude": 25.204849, "longitude": 55.270783, "timezone": "Asia/Dubai"},
+  {"name": "London, United Kingdom", "aliases": ["London"], "latitude": 51.507218, "longitude": -0.127586, "timezone": "Europe/London"},
+  {"name": "Warsaw, Poland", "aliases": ["Warsaw", "Warszawa"], "latitude": 52.229676, "longitude": 21.012229, "timezone": "Europe/Warsaw"},
+  {"name": "New York, United States", "aliases": ["New York", "NYC"], "latitude": 40.712776, "longitude": -74.005974, "timezone": "America/New_York"},
+  {"name": "San Francisco, California, United States", "aliases": ["San Francisco", "SF"], "latitude": 37.774929, "longitude": -122.419416, "timezone": "America/Los_Angeles"},
+  {"name": "Toronto, Ontario, Canada", "aliases": ["Toronto"], "latitude": 43.653226, "longitude": -79.383184, "timezone": "America/Toronto"},
+  {"name": "Sydney, New South Wales, Australia", "aliases": ["Sydney"], "latitude": -33.86882, "longitude": 151.209296, "timezone": "Australia/Sydney"},
+  {"name": "Regidi, Andhrapradesh, India", "aliases": ["regidi", "amadalavalasa"], "latitude": 18.5946, "longitude": 83.7070, "timezone": "Asia/Kolkata"}
+]
+
