@@ -2,7 +2,7 @@
 
 ## Source PDF
 
-The supplied PDF at `/Users/chandramoulisasubelli/Downloads/bhrigu-samhita-tmrao.pdf` is a scanned 304-page document. Poppler can render the pages, but text extraction returns empty content because the pages are image-based.
+The supplied PDF at `bhrigu-samhita-tmrao.pdf` is a scanned 304-page document. Poppler can render the pages, but text extraction returns empty content because the pages are image-based.
 
 The rendered title page identifies the work as *Bhrigu Samhita*, abridged by Dr. T.M. Rao. Because OCR is not available in this workspace, the project does not claim to have machine-ingested every verse from the PDF. Instead, the interpretation model is transparent and editable in `app/astro/rules.py`.
 
