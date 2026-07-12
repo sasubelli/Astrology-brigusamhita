@@ -139,16 +139,10 @@ function renderReport(data) {
       <div class="chat-shell">
         <div class="chat-log" id="chatLog">
           <div class="chat-bubble bot">
-            Ask about lagna, moon, dasha, marriage, career, or remedies. I will explain using the live chart and a short sloka.
+            Ask about lagna, moon, dasha, marriage, career, or remedies. Type in English, Hindi, Telugu, or Tamil and I will answer in the same language using the live chart and a short sloka.
           </div>
         </div>
         <form id="chatForm" class="chat-form">
-          <select name="language" aria-label="Language">
-            <option value="en">English</option>
-            <option value="hi">Hindi</option>
-            <option value="te">Telugu</option>
-            <option value="ta">Tamil</option>
-          </select>
           <input name="question" placeholder="Ask a chart question" />
           <button type="submit">Send</button>
         </form>
@@ -270,8 +264,9 @@ function bindChat(chartData) {
     event.preventDefault();
     const fd = new FormData(formEl);
     const question = String(fd.get("question") || "").trim();
-    const language = String(fd.get("language") || "en");
     if (!question) return;
+
+    const language = "auto";
 
     appendBubble(logEl, question, "user");
     chatHistory.push({ role: "user", content: question });
@@ -294,7 +289,6 @@ function bindChat(chartData) {
       chatHistory.push({ role: "assistant", content: data.answer, sloka: data.sloka, transliteration: data.transliteration });
       statusEl.textContent = "";
       formEl.reset();
-      formEl.language.value = language;
     } catch (error) {
       appendBubble(logEl, escapeHtml(error.message), "bot error");
       statusEl.textContent = "Chat error";
