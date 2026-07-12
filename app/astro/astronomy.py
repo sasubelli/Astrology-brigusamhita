@@ -52,8 +52,8 @@ def sidereal_ascendant(jd: float, latitude: float, longitude: float, ayanamsa: f
     lst = math.radians(normalize_deg(greenwich_sidereal_time(jd) + longitude))
     lat = math.radians(latitude)
     eps = math.radians(mean_obliquity(jd))
-    numerator = -math.cos(lst)
-    denominator = math.sin(lst) * math.cos(eps) + math.tan(lat) * math.sin(eps)
+    numerator = math.cos(lst)
+    denominator = -math.sin(lst) * math.cos(eps) + math.tan(lat) * math.sin(eps)
     tropical = normalize_deg(math.degrees(math.atan2(numerator, denominator)))
     return normalize_deg(tropical - ayanamsa)
 
@@ -255,4 +255,3 @@ def _sin(degrees: float) -> float:
 
 def _cos(degrees: float) -> float:
     return math.cos(math.radians(degrees))
-

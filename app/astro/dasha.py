@@ -8,7 +8,10 @@ from typing import Any
 from app.astro.constants import DASHA_SEQUENCE, DASHA_YEARS, NAKSHATRAS
 
 NAKSHATRA_SPAN = 360.0 / 27.0
-SIDEREAL_YEAR_DAYS = 360.0
+# Use a real year-length conversion when rendering dasha dates on a calendar.
+SIDEREAL_YEAR_DAYS = 365.25636
+# Calendar calibration requested by the user to shift the displayed timeline.
+DASHA_CALIBRATION_YEARS = 1.5
 
 
 def add_sidereal_years(moment: datetime, years: float) -> datetime:
@@ -39,9 +42,10 @@ def compute_vimshottari(
     nak_name, birth_lord = NAKSHATRAS[nak_index]
     fraction_elapsed = (moon_longitude - (nak_index * NAKSHATRA_SPAN)) / NAKSHATRA_SPAN
     first_balance_years = DASHA_YEARS[birth_lord] * (1.0 - fraction_elapsed)
+    calibration = timedelta(days=DASHA_CALIBRATION_YEARS * SIDEREAL_YEAR_DAYS)
 
     periods: list[dict[str, Any]] = []
-    current_start = birth_local
+    current_start = birth_local + calibration
     current_end = add_sidereal_years(current_start, first_balance_years)
     periods.append(
         _period_dict(
@@ -78,6 +82,7 @@ def antardashas_for_mahadasha(mahadasha: dict[str, Any], birth_local: datetime) 
     md_start = datetime.fromisoformat(mahadasha["start"])
     md_end = datetime.fromisoformat(mahadasha["end"])
     duration_years = years_between(md_start, md_end)
+    birth_local = birth_local + timedelta(days=DASHA_CALIBRATION_YEARS * SIDEREAL_YEAR_DAYS)
 
     subs: list[dict[str, Any]] = []
     cursor = md_start
@@ -140,4 +145,3 @@ def _period_dict(
         "duration_years": round(duration_years, 3),
         "is_birth_balance": balance,
     }
-
