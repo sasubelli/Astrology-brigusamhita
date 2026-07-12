@@ -46,6 +46,6 @@ def api_predict(request: BirthRequest) -> dict:
 @app.post("/api/chat")
 def api_chat(request: ChatRequest) -> dict:
     try:
-        return answer_chat(request.question, request.language, request.chart)
+        return answer_chat(request.question, request.language, request.chart, request.history)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

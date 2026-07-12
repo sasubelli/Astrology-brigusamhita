@@ -38,4 +38,4 @@ class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=400)
     language: Literal["en", "hi", "te", "ta"] = "en"
     chart: dict | None = None
-
+    history: list[dict] = Field(default_factory=list, max_length=12)

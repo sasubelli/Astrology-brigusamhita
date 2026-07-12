@@ -6,6 +6,7 @@ const placesList = document.querySelector("#places");
 const chatForm = document.querySelector("#chatForm");
 const chatLog = document.querySelector("#chatLog");
 const chatStatus = document.querySelector("#chatStatus");
+let chatHistory = [];
 
 const chartSlots = [
   [12, 1, 1],
@@ -265,7 +266,7 @@ function bindChat(chartData) {
   const statusEl = document.querySelector("#chatStatus");
   if (!formEl || !logEl || !statusEl) return;
 
-  formEl.addEventListener("submit", async (event) => {
+  formEl.onsubmit = async (event) => {
     event.preventDefault();
     const fd = new FormData(formEl);
     const question = String(fd.get("question") || "").trim();
@@ -273,6 +274,7 @@ function bindChat(chartData) {
     if (!question) return;
 
     appendBubble(logEl, question, "user");
+    chatHistory.push({ role: "user", content: question });
     statusEl.textContent = "Thinking";
     formEl.querySelector("button").disabled = true;
 
@@ -280,7 +282,7 @@ function bindChat(chartData) {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, language, chart: chartData }),
+        body: JSON.stringify({ question, language, chart: chartData, history: chatHistory }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Chat reply failed");
@@ -289,6 +291,7 @@ function bindChat(chartData) {
         `${data.answer}<br><br><strong>Sloka:</strong> ${escapeHtml(data.sloka)}<br><strong>Transliteration:</strong> ${escapeHtml(data.transliteration)}`,
         "bot",
       );
+      chatHistory.push({ role: "assistant", content: data.answer, sloka: data.sloka, transliteration: data.transliteration });
       statusEl.textContent = "";
       formEl.reset();
       formEl.language.value = language;
@@ -298,7 +301,7 @@ function bindChat(chartData) {
     } finally {
       formEl.querySelector("button").disabled = false;
     }
-  }, { once: true });
+  };
 }
 
 function appendBubble(container, text, kind) {

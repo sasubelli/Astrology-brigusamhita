@@ -62,14 +62,19 @@ TOPIC_KEYWORDS = {
 }
 
 
-def answer_chat(question: str, language: str, chart: dict[str, Any] | None = None) -> dict[str, Any]:
+def answer_chat(
+    question: str,
+    language: str,
+    chart: dict[str, Any] | None = None,
+    history: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     lang = LANG_TEXT.get(language, LANG_TEXT["en"])
     q = question.casefold().strip()
     topic = _classify_topic(q)
-    plan = _build_plan(topic, chart)
+    plan = _build_plan(topic, chart, history or [])
     payload = _extract_chart_payload(chart or {})
 
-    local_model = _run_local_model(question, language, chart, plan, payload)
+    local_model = _run_local_model(question, language, chart, plan, payload, history or [])
     if local_model:
         return local_model
 
@@ -106,7 +111,7 @@ def _classify_topic(question: str) -> str:
     return "general"
 
 
-def _build_plan(topic: str, chart: dict[str, Any] | None) -> list[str]:
+def _build_plan(topic: str, chart: dict[str, Any] | None, history: list[dict[str, Any]]) -> list[str]:
     plan = [
         "Read D1 for the base life pattern.",
         "Check D9 for dharma and refinement.",
@@ -118,6 +123,8 @@ def _build_plan(topic: str, chart: dict[str, Any] | None) -> list[str]:
         plan.append(f"Prioritise the divisional chart most relevant to {topic}.")
     if chart:
         plan.append("Use the live birth chart values already computed in this session.")
+    if history:
+        plan.append("Use the conversation history to preserve context from earlier questions.")
     return plan
 
 
@@ -127,12 +134,13 @@ def _run_local_model(
     chart: dict[str, Any] | None,
     plan: list[str],
     payload: dict[str, Any],
+    history: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
     if not shutil.which("ollama"):
         return None
 
     model = os.getenv("ASTRO_CHAT_MODEL", "llama3.1")
-    prompt = _build_model_prompt(question, language, chart or {}, plan, payload)
+    prompt = _build_model_prompt(question, language, chart or {}, plan, payload, history)
     try:
         completed = subprocess.run(
             ["ollama", "run", model, prompt],
@@ -175,6 +183,7 @@ def _build_model_prompt(
     chart: dict[str, Any],
     plan: list[str],
     payload: dict[str, Any],
+    history: list[dict[str, Any]],
 ) -> str:
     chart_summary = {
         "ascendant": chart.get("ascendant", {}),
@@ -198,6 +207,7 @@ def _build_model_prompt(
         "style": "Give a concise but detailed astrology explanation grounded only in the provided chart data. Do not invent facts. Mention the relevant divisional charts by name. Include one short sloka in Sanskrit or the selected language, then a transliteration.",
         "question": question,
         "plan": plan,
+        "history": history[-6:],
         "chart": chart_summary,
     }
     return json.dumps(instruction, ensure_ascii=False, indent=2)
