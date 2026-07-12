@@ -292,6 +292,77 @@ input:focus {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.chat-shell {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fcfcfb;
+  display: grid;
+  gap: 10px;
+}
+
+.chat-log {
+  display: grid;
+  gap: 10px;
+  max-height: 360px;
+  overflow: auto;
+  padding: 4px;
+}
+
+.chat-bubble {
+  max-width: 92%;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.chat-bubble.user {
+  margin-left: auto;
+  background: #eef8f5;
+  border-color: #cfe5df;
+}
+
+.chat-bubble.bot {
+  background: #fffaf1;
+}
+
+.chat-bubble.error {
+  background: #fff0f0;
+  border-color: #f0c8c8;
+}
+
+.chat-form {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) 92px;
+  gap: 8px;
+}
+
+.chat-form select,
+.chat-form input,
+.chat-form button {
+  min-height: 40px;
+  border-radius: 6px;
+  border: 1px solid #cfd8d4;
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.chat-form button {
+  background: var(--teal);
+  color: #fff;
+  border: 0;
+  font-weight: 800;
+}
+
+.chat-status {
+  min-height: 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .mini-card {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -385,7 +456,8 @@ tr:last-child td {
   .yoga-grid,
   .remedy-grid,
   .area-grid,
-  .timeline-grid {
+  .timeline-grid,
+  .chat-form {
     grid-template-columns: 1fr;
   }
 }

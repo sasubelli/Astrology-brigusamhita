@@ -33,3 +33,9 @@ class BirthRequest(BaseModel):
             raise ValueError("Use time format HH:MM or HH:MM:SS.")
         return value
 
+
+class ChatRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=400)
+    language: Literal["en", "hi", "te", "ta"] = "en"
+    chart: dict | None = None
+

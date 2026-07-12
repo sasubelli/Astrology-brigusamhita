@@ -9,8 +9,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.astro.engine import build_chart, search_places
+from app.astro.chatbot import answer_chat
 from app.astro.rules import build_prediction
-from app.models import BirthRequest
+from app.models import BirthRequest, ChatRequest
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -41,3 +42,10 @@ def api_predict(request: BirthRequest) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+
+@app.post("/api/chat")
+def api_chat(request: ChatRequest) -> dict:
+    try:
+        return answer_chat(request.question, request.language, request.chart)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

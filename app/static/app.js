@@ -3,6 +3,9 @@ const statusEl = document.querySelector("#status");
 const reportEl = document.querySelector("#report");
 const emptyState = document.querySelector("#emptyState");
 const placesList = document.querySelector("#places");
+const chatForm = document.querySelector("#chatForm");
+const chatLog = document.querySelector("#chatLog");
+const chatStatus = document.querySelector("#chatStatus");
 
 const chartSlots = [
   [12, 1, 1],
@@ -129,7 +132,31 @@ function renderReport(data) {
         .map((item) => miniCard(item.focus, item.practice))
         .join("")}</div>
     </section>
+
+    <section class="section">
+      <h2>Live Chat</h2>
+      <div class="chat-shell">
+        <div class="chat-log" id="chatLog">
+          <div class="chat-bubble bot">
+            Ask about lagna, moon, dasha, marriage, career, or remedies. I will explain using the live chart and a short sloka.
+          </div>
+        </div>
+        <form id="chatForm" class="chat-form">
+          <select name="language" aria-label="Language">
+            <option value="en">English</option>
+            <option value="hi">Hindi</option>
+            <option value="te">Telugu</option>
+            <option value="ta">Tamil</option>
+          </select>
+          <input name="question" placeholder="Ask a chart question" />
+          <button type="submit">Send</button>
+        </form>
+        <div id="chatStatus" class="chat-status"></div>
+      </div>
+    </section>
   `;
+
+  bindChat(data);
 }
 
 function renderChart(data) {
@@ -231,3 +258,53 @@ function escapeHtml(value) {
 }
 
 loadPlaces().catch(() => {});
+
+function bindChat(chartData) {
+  const formEl = document.querySelector("#chatForm");
+  const logEl = document.querySelector("#chatLog");
+  const statusEl = document.querySelector("#chatStatus");
+  if (!formEl || !logEl || !statusEl) return;
+
+  formEl.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const fd = new FormData(formEl);
+    const question = String(fd.get("question") || "").trim();
+    const language = String(fd.get("language") || "en");
+    if (!question) return;
+
+    appendBubble(logEl, question, "user");
+    statusEl.textContent = "Thinking";
+    formEl.querySelector("button").disabled = true;
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, language, chart: chartData }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Chat reply failed");
+      appendBubble(
+        logEl,
+        `${data.answer}<br><br><strong>Sloka:</strong> ${escapeHtml(data.sloka)}<br><strong>Transliteration:</strong> ${escapeHtml(data.transliteration)}`,
+        "bot",
+      );
+      statusEl.textContent = "";
+      formEl.reset();
+      formEl.language.value = language;
+    } catch (error) {
+      appendBubble(logEl, escapeHtml(error.message), "bot error");
+      statusEl.textContent = "Chat error";
+    } finally {
+      formEl.querySelector("button").disabled = false;
+    }
+  }, { once: true });
+}
+
+function appendBubble(container, text, kind) {
+  const div = document.createElement("div");
+  div.className = `chat-bubble ${kind}`;
+  div.innerHTML = text;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
