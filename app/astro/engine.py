@@ -37,6 +37,7 @@ except ImportError:  # pragma: no cover - exercised in local fallback mode
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 NAKSHATRA_SPAN = 360.0 / 27.0
 PADA_SPAN = NAKSHATRA_SPAN / 4.0
+DIVISIONAL_CHARTS = tuple(range(1, 13))
 
 
 @dataclass(frozen=True)
@@ -84,6 +85,7 @@ def build_chart(payload: Any) -> dict[str, Any]:
     planets = _planet_positions(jd_ut, asc_sign_index, ayanamsa)
     moon = planets["Moon"]
     sun = planets["Sun"]
+    divisional_charts = build_divisional_charts(planets, asc_sign_index)
 
     house_signs = []
     for house in range(1, 13):
@@ -119,6 +121,7 @@ def build_chart(payload: Any) -> dict[str, Any]:
         },
         "ascendant": _point_details(asc_longitude),
         "planets": {name: asdict(position) for name, position in planets.items()},
+        "divisional_charts": divisional_charts,
         "house_signs": house_signs,
         "panchanga": _panchanga(sun.longitude, moon.longitude, birth.local_datetime),
     }
@@ -284,6 +287,70 @@ def _point_details(longitude: float) -> dict[str, Any]:
         "nakshatra_lord": nak_lord,
         "pada": pada,
     }
+
+
+def build_divisional_charts(planets: dict[str, PlanetPosition], asc_sign_index: int) -> dict[str, Any]:
+    charts: dict[str, Any] = {}
+    for division in DIVISIONAL_CHARTS:
+        charts[f"D{division}"] = _build_divisional_chart(planets, asc_sign_index, division)
+    return charts
+
+
+def _build_divisional_chart(
+    planets: dict[str, PlanetPosition],
+    asc_sign_index: int,
+    division: int,
+) -> dict[str, Any]:
+    asc_div_sign = _divisional_sign_index(asc_sign_index, 0.0, division)
+    planet_rows = {}
+    for name, pos in planets.items():
+        planet_rows[name] = {
+            "sign_index": _divisional_sign_index(pos.sign_index, pos.degree_in_sign, division),
+            "sign": SIGN_NAMES[_divisional_sign_index(pos.sign_index, pos.degree_in_sign, division)],
+            "sign_sanskrit": SIGN_SANSKRIT[_divisional_sign_index(pos.sign_index, pos.degree_in_sign, division)],
+            "house": ((_divisional_sign_index(pos.sign_index, pos.degree_in_sign, division) - asc_div_sign) % 12) + 1,
+        }
+    return {
+        "ascendant": {
+            "sign_index": asc_div_sign,
+            "sign": SIGN_NAMES[asc_div_sign],
+            "sign_sanskrit": SIGN_SANSKRIT[asc_div_sign],
+        },
+        "planets": planet_rows,
+    }
+
+
+def _divisional_sign_index(sign_index: int, degree_in_sign: float, division: int) -> int:
+    if division <= 1:
+        return sign_index
+    segment = 30.0 / division
+    segment_index = int(degree_in_sign // segment)
+    if division == 9:
+        # Navamsa follows a standard movable/fixed/dual progression.
+        return _navamsa_index(sign_index, segment_index)
+    if division == 10:
+        # Dasamsa progression is used for career emphasis.
+        return _dasamsa_index(sign_index, segment_index)
+    if division == 12:
+        return (sign_index + segment_index) % 12
+    return (sign_index + segment_index) % 12
+
+
+def _navamsa_index(sign_index: int, part_index: int) -> int:
+    movable = {0, 3, 6, 9}
+    fixed = {1, 4, 7, 10}
+    dual = {2, 5, 8, 11}
+    if sign_index in movable:
+        return (sign_index + part_index) % 12
+    if sign_index in fixed:
+        return (sign_index + 8 + part_index) % 12
+    if sign_index in dual:
+        return (sign_index + 4 + part_index) % 12
+    return (sign_index + part_index) % 12
+
+
+def _dasamsa_index(sign_index: int, part_index: int) -> int:
+    return (sign_index * 10 + part_index) % 12
 
 
 def _dignity(planet: str, sign: str) -> str:

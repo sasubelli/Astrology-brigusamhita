@@ -59,3 +59,13 @@ pip install -r requirements-swiss.txt
 ```
 
 If that fails on macOS, check that Xcode Command Line Tools and the active SDK path are healthy.
+
+## Optional Local Chat Model
+
+If `ollama` is installed, the chat endpoint will use it automatically for richer answers.
+
+```bash
+export ASTRO_CHAT_MODEL=llama3.1
+```
+
+If no local model is installed, the app falls back to the built-in chart planner so the chat still works.
