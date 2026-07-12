@@ -68,25 +68,26 @@ def answer_chat(
     chart: dict[str, Any] | None = None,
     history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    lang = LANG_TEXT.get(language, LANG_TEXT["en"])
     q = question.casefold().strip()
+    resolved_language = _resolve_language(language, q, history or [])
+    lang = LANG_TEXT.get(resolved_language, LANG_TEXT["en"])
     topic = _classify_topic(q)
     plan = _build_plan(topic, chart, history or [])
     payload = _extract_chart_payload(chart or {})
 
-    local_model = _run_local_model(question, language, chart, plan, payload, history or [])
+    local_model = _run_local_model(question, resolved_language, chart, plan, payload, history or [])
     if local_model:
         return local_model
 
     answer_lines = [lang["prefix"]]
-    answer_lines.extend(_compose_topic_answer(topic, payload, language))
+    answer_lines.extend(_compose_topic_answer(topic, payload, resolved_language))
     if payload.get("dasha_lord"):
-        answer_lines.append(f"Current running dasha lord: {payload['dasha_lord']}.")
+        answer_lines.append(_localized_dasha_line(resolved_language, payload["dasha_lord"]))
     answer_lines.append(lang["closing"])
 
-    sloka, translit = _sloka_for_topic(topic, payload, language)
+    sloka, translit = _sloka_for_topic(topic, payload, resolved_language)
     return {
-        "language": language,
+        "language": resolved_language,
         "answer": " ".join(answer_lines),
         "sloka": sloka,
         "transliteration": translit,
@@ -102,6 +103,26 @@ def answer_chat(
             "d12": _focus_snapshot(payload, "D12"),
         },
     }
+
+
+def _resolve_language(language: str, question: str, history: list[dict[str, Any]]) -> str:
+    if language in LANG_TEXT:
+        return language
+    if _contains_script(question, "hi"):
+        return "hi"
+    if _contains_script(question, "te"):
+        return "te"
+    if _contains_script(question, "ta"):
+        return "ta"
+    for item in reversed(history[-4:]):
+        content = str(item.get("content", ""))
+        if _contains_script(content, "hi"):
+            return "hi"
+        if _contains_script(content, "te"):
+            return "te"
+        if _contains_script(content, "ta"):
+            return "ta"
+    return "en"
 
 
 def _classify_topic(question: str) -> str:
@@ -126,6 +147,16 @@ def _build_plan(topic: str, chart: dict[str, Any] | None, history: list[dict[str
     if history:
         plan.append("Use the conversation history to preserve context from earlier questions.")
     return plan
+
+
+def _contains_script(text: str, language: str) -> bool:
+    if language == "hi":
+        return any("\u0900" <= ch <= "\u097f" for ch in text)
+    if language == "te":
+        return any("\u0c00" <= ch <= "\u0c7f" for ch in text)
+    if language == "ta":
+        return any("\u0b80" <= ch <= "\u0bff" for ch in text)
+    return False
 
 
 def _run_local_model(
@@ -241,41 +272,41 @@ def _compose_topic_answer(topic: str, payload: dict[str, Any], language: str) ->
 
     if topic == "lagna":
         pieces.append(_phrase(language, "lagna", asc, moon))
-        pieces.append(_chart_note("D1", payload.get("d1", {}), "core temperament and life direction"))
-        pieces.append(_chart_note("D9", payload.get("d9", {}), "maturity and dharma"))
+        pieces.append(_chart_note(language, "D1", payload.get("d1", {}), "core temperament and life direction"))
+        pieces.append(_chart_note(language, "D9", payload.get("d9", {}), "maturity and dharma"))
     elif topic == "moon":
         pieces.append(_phrase(language, "moon", asc, moon))
-        pieces.append(_chart_note("D1", payload.get("d1", {}), "emotional baseline"))
-        pieces.append(_chart_note("D12", payload.get("d12", {}), "ancestral and subconscious memory"))
+        pieces.append(_chart_note(language, "D1", payload.get("d1", {}), "emotional baseline"))
+        pieces.append(_chart_note(language, "D12", payload.get("d12", {}), "ancestral and subconscious memory"))
     elif topic == "dasha":
         pieces.append(_phrase(language, "dasha", asc, moon))
-        pieces.append(_chart_note("D10", payload.get("d10", {}), "career activation through timing"))
+        pieces.append(_chart_note(language, "D10", payload.get("d10", {}), "career activation through timing"))
     elif topic == "marriage":
-        pieces.append(_chart_note("D1", payload.get("d1", {}), "spouse interaction in the base chart"))
-        pieces.append(_chart_note("D9", payload.get("d9", {}), "marriage dharma and relationship maturity"))
+        pieces.append(_chart_note(language, "D1", payload.get("d1", {}), "spouse interaction in the base chart"))
+        pieces.append(_chart_note(language, "D9", payload.get("d9", {}), "marriage dharma and relationship maturity"))
     elif topic == "career":
-        pieces.append(_chart_note("D1", payload.get("d1", {}), "general profession and house axis"))
-        pieces.append(_chart_note("D10", payload.get("d10", {}), "career structure and public role"))
+        pieces.append(_chart_note(language, "D1", payload.get("d1", {}), "general profession and house axis"))
+        pieces.append(_chart_note(language, "D10", payload.get("d10", {}), "career structure and public role"))
     elif topic == "children":
-        pieces.append(_chart_note("D1", payload.get("d1", {}), "children significations in the base chart"))
-        pieces.append(_chart_note("D9", payload.get("d9", {}), "blessing, merit, and generational dharma"))
+        pieces.append(_chart_note(language, "D1", payload.get("d1", {}), "children significations in the base chart"))
+        pieces.append(_chart_note(language, "D9", payload.get("d9", {}), "blessing, merit, and generational dharma"))
     elif topic == "wealth":
-        pieces.append(_chart_note("D2", payload.get("d2", {}), "speech, accumulation, and family resources"))
-        pieces.append(_chart_note("D11", payload.get("d11", {}), "income and fulfillment patterns"))
+        pieces.append(_chart_note(language, "D2", payload.get("d2", {}), "speech, accumulation, and family resources"))
+        pieces.append(_chart_note(language, "D11", payload.get("d11", {}), "income and fulfillment patterns"))
     elif topic == "health":
-        pieces.append(_chart_note("D1", payload.get("d1", {}), "body and vitality"))
-        pieces.append(_chart_note("D6", payload.get("d6", {}), "routine, resistance, and recovery"))
+        pieces.append(_chart_note(language, "D1", payload.get("d1", {}), "body and vitality"))
+        pieces.append(_chart_note(language, "D6", payload.get("d6", {}), "routine, resistance, and recovery"))
     elif topic == "remedy":
-        pieces.append("Simple remedies should remain practical: discipline, prayer, charity, and avoiding impulsive actions during difficult dasha windows.")
-        pieces.append(_chart_note("D12", payload.get("d12", {}), "what to release or simplify"))
+        pieces.append(_localized_remedy_line(language))
+        pieces.append(_chart_note(language, "D12", payload.get("d12", {}), "what to release or simplify"))
     elif topic == "spiritual":
-        pieces.append(_chart_note("D9", payload.get("d9", {}), "dharma and guru connection"))
-        pieces.append(_chart_note("D12", payload.get("d12", {}), "retreat, release, and inward practice"))
+        pieces.append(_chart_note(language, "D9", payload.get("d9", {}), "dharma and guru connection"))
+        pieces.append(_chart_note(language, "D12", payload.get("d12", {}), "retreat, release, and inward practice"))
     else:
         pieces.append(_phrase(language, "general", asc, moon))
-        pieces.append(_chart_note("D1", payload.get("d1", {}), "life theme"))
-        pieces.append(_chart_note("D9", payload.get("d9", {}), "dharma refinement"))
-        pieces.append(_chart_note("D10", payload.get("d10", {}), "public work"))
+        pieces.append(_chart_note(language, "D1", payload.get("d1", {}), "life theme"))
+        pieces.append(_chart_note(language, "D9", payload.get("d9", {}), "dharma refinement"))
+        pieces.append(_chart_note(language, "D10", payload.get("d10", {}), "public work"))
     return pieces
 
 
@@ -310,15 +341,16 @@ def _phrase(language: str, key: str, asc: dict[str, Any], moon: dict[str, Any]) 
     }[lang_key]
 
 
-def _chart_note(chart_name: str, chart: dict[str, Any], meaning: str) -> str:
+def _chart_note(language: str, chart_name: str, chart: dict[str, Any], meaning: str) -> str:
     asc = chart.get("ascendant", {})
     moon = chart.get("planets", {}).get("Moon", {})
     moon_house = moon.get("house", "?")
-    return (
-        f"{chart_name} is used for {meaning}. "
-        f"Current divisional ascendant: {asc.get('sign_sanskrit', asc.get('sign', 'unknown'))}; "
-        f"Moon falls in house {moon_house} in that division."
-    )
+    return {
+        "en": f"{chart_name} is used for {meaning}. Current divisional ascendant: {asc.get('sign_sanskrit', asc.get('sign', 'unknown'))}; Moon falls in house {moon_house} in that division.",
+        "hi": f"{chart_name} का उपयोग {meaning} के लिए होता है। वर्तमान divisional ascendant: {asc.get('sign_sanskrit', asc.get('sign', 'unknown'))}; उस division में चंद्र {moon_house}वें भाव में है।",
+        "te": f"{chart_name} ను {meaning} కోసం ఉపయోగిస్తాం. Current divisional ascendant: {asc.get('sign_sanskrit', asc.get('sign', 'unknown'))}; ఆ division లో చంద్రుడు {moon_house}వ భావంలో ఉన్నాడు.",
+        "ta": f"{chart_name} என்பது {meaning}க்காகப் பயன்படுத்தப்படுகிறது. Current divisional ascendant: {asc.get('sign_sanskrit', asc.get('sign', 'unknown'))}; அந்த division-இல் சந்திரன் {moon_house}-ஆம் பாவத்தில் உள்ளது.",
+    }.get(language, f"{chart_name} is used for {meaning}. Current divisional ascendant: {asc.get('sign_sanskrit', asc.get('sign', 'unknown'))}; Moon falls in house {moon_house} in that division.")
 
 
 def _focus_snapshot(payload: dict[str, Any], chart_name: str) -> dict[str, Any]:
@@ -330,6 +362,24 @@ def _focus_snapshot(payload: dict[str, Any], chart_name: str) -> dict[str, Any]:
         "moon_sign": moon.get("sign_sanskrit", moon.get("sign", "")),
         "moon_house": moon.get("house", None),
     }
+
+
+def _localized_dasha_line(language: str, lord: str) -> str:
+    return {
+        "en": f"Current running dasha lord: {lord}.",
+        "hi": f"वर्तमान चल रही दशा का स्वामी: {lord}.",
+        "te": f"ప్రస్తుతం నడుస్తున్న దశాధిపతి: {lord}.",
+        "ta": f"தற்போதைய நடக்கும் தசாதிபதி: {lord}.",
+    }.get(language, f"Current running dasha lord: {lord}.")
+
+
+def _localized_remedy_line(language: str) -> str:
+    return {
+        "en": "Simple remedies should remain practical: discipline, prayer, charity, and avoiding impulsive actions during difficult dasha windows.",
+        "hi": "सरल उपाय व्यावहारिक होने चाहिए: अनुशासन, प्रार्थना, दान, और कठिन दशा में जल्दबाज़ी से बचना।",
+        "te": "సరళమైన పరిహారాలు అనువర్తనీయంగా ఉండాలి: క్రమశిక్షణ, ప్రార్థన, దానం, కఠిన దశలో ఆవేశపూరిత చర్యలు నివారించడం.",
+        "ta": "எளிய பரிகாரங்கள் நடைமுறையில் இருக்க வேண்டும்: ஒழுக்கம், பிரார்த்தனை, தானம், மற்றும் கடினமான தசா காலத்தில் அவசர முடிவுகளை தவிர்ப்பது.",
+    }.get(language, "Simple remedies should remain practical: discipline, prayer, charity, and avoiding impulsive actions during difficult dasha windows.")
 
 
 def _sloka_for_topic(topic: str, payload: dict[str, Any], language: str) -> tuple[str, str]:

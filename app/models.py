@@ -36,6 +36,6 @@ class BirthRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=400)
-    language: Literal["en", "hi", "te", "ta"] = "en"
+    language: Literal["auto", "en", "hi", "te", "ta"] = "auto"
     chart: dict | None = None
     history: list[dict] = Field(default_factory=list, max_length=12)
