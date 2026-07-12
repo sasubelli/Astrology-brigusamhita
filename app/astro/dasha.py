@@ -11,7 +11,7 @@ NAKSHATRA_SPAN = 360.0 / 27.0
 # Use a real year-length conversion when rendering dasha dates on a calendar.
 SIDEREAL_YEAR_DAYS = 365.25636
 # Calendar calibration requested by the user to shift the displayed timeline.
-DASHA_CALIBRATION_YEARS = 1.5
+DASHA_CALIBRATION_YEARS = -1.5
 
 
 def add_sidereal_years(moment: datetime, years: float) -> datetime:
