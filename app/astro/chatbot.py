@@ -312,6 +312,7 @@ def _compose_topic_answer(topic: str, payload: dict[str, Any], language: str) ->
         pieces.append(_chart_note(language, "D12", payload.get("d12", {}), "retreat, release, and inward practice"))
     else:
         pieces.append(_phrase(language, "general", asc, moon))
+        pieces.append(_chart_anchor_line(language, payload))
         pieces.append(_chart_note(language, "D1", payload.get("d1", {}), "life theme"))
         pieces.append(_chart_note(language, "D9", payload.get("d9", {}), "dharma refinement"))
         pieces.append(_chart_note(language, "D10", payload.get("d10", {}), "public work"))
@@ -349,16 +350,48 @@ def _phrase(language: str, key: str, asc: dict[str, Any], moon: dict[str, Any]) 
     }[lang_key]
 
 
+def _chart_anchor_line(language: str, payload: dict[str, Any]) -> str:
+    asc = payload.get("ascendant", {})
+    moon = payload.get("moon", {})
+    dasha = payload.get("dasha_lord", "")
+    return {
+        "en": (
+            f"Chart anchors: lagna is {asc.get('sign_sanskrit', asc.get('sign', 'unknown'))}, "
+            f"Moon is in {moon.get('sign_sanskrit', moon.get('sign', 'unknown'))} "
+            f"with {moon.get('nakshatra', 'unknown')} pada {moon.get('pada', '?')}, "
+            f"and the running dasha lord is {dasha or 'not available'}."
+        ),
+        "hi": (
+            f"चार्ट के मुख्य आधार: लग्न {asc.get('sign_sanskrit', asc.get('sign', 'unknown'))} है, "
+            f"चंद्र {moon.get('sign_sanskrit', moon.get('sign', 'unknown'))} में {moon.get('nakshatra', 'unknown')} पाद {moon.get('pada', '?')} के साथ है, "
+            f"और चल रही दशा {dasha or 'उपलब्ध नहीं'} है।"
+        ),
+        "te": (
+            f"చార్ట్ ఆధారాలు: లగ్నం {asc.get('sign_sanskrit', asc.get('sign', 'unknown'))}, "
+            f"చంద్రుడు {moon.get('sign_sanskrit', moon.get('sign', 'unknown'))}లో {moon.get('nakshatra', 'unknown')} పాద {moon.get('pada', '?')}తో ఉన్నాడు, "
+            f"ప్రస్తుత దశాధిపతి {dasha or 'లభ్యం కాదు'}."
+        ),
+        "ta": (
+            f"சார்ட் அடிப்படைகள்: லக்னம் {asc.get('sign_sanskrit', asc.get('sign', 'unknown'))}, "
+            f"சந்திரன் {moon.get('sign_sanskrit', moon.get('sign', 'unknown'))} இல் {moon.get('nakshatra', 'unknown')} பாத {moon.get('pada', '?')} உடன் உள்ளது, "
+            f"நடக்கும் தசாதிபதி {dasha or 'கிடைக்கவில்லை'}."
+        ),
+    }.get(language, "")
+
+
 def _chart_note(language: str, chart_name: str, chart: dict[str, Any], meaning: str) -> str:
     asc = chart.get("ascendant", {})
     moon = chart.get("planets", {}).get("Moon", {})
     moon_house = moon.get("house", "?")
+    asc_label = asc.get("sign_sanskrit") or asc.get("sign") or "unknown"
+    moon_label = moon.get("sign_sanskrit") or moon.get("sign") or "unknown"
+    moon_house_label = moon_house if moon_house != "?" else "?"
     return {
-        "en": f"{chart_name} is used for {meaning}. Current divisional ascendant: {asc.get('sign_sanskrit', asc.get('sign', 'unknown'))}; Moon falls in house {moon_house} in that division.",
-        "hi": f"{chart_name} का उपयोग {meaning} के लिए होता है। वर्तमान divisional ascendant: {asc.get('sign_sanskrit', asc.get('sign', 'unknown'))}; उस division में चंद्र {moon_house}वें भाव में है।",
-        "te": f"{chart_name} ను {meaning} కోసం ఉపయోగిస్తాం. Current divisional ascendant: {asc.get('sign_sanskrit', asc.get('sign', 'unknown'))}; ఆ division లో చంద్రుడు {moon_house}వ భావంలో ఉన్నాడు.",
-        "ta": f"{chart_name} என்பது {meaning}க்காகப் பயன்படுத்தப்படுகிறது. Current divisional ascendant: {asc.get('sign_sanskrit', asc.get('sign', 'unknown'))}; அந்த division-இல் சந்திரன் {moon_house}-ஆம் பாவத்தில் உள்ளது.",
-    }.get(language, f"{chart_name} is used for {meaning}. Current divisional ascendant: {asc.get('sign_sanskrit', asc.get('sign', 'unknown'))}; Moon falls in house {moon_house} in that division.")
+        "en": f"{chart_name} is used for {meaning}. Current divisional ascendant: {asc_label}; Moon falls in house {moon_house_label} in that division ({moon_label}).",
+        "hi": f"{chart_name} का उपयोग {meaning} के लिए होता है। वर्तमान divisional ascendant: {asc_label}; उस division में चंद्र {moon_house_label}वें भाव में है ({moon_label})।",
+        "te": f"{chart_name} ను {meaning} కోసం ఉపయోగిస్తాం. Current divisional ascendant: {asc_label}; ఆ division లో చంద్రుడు {moon_house_label}వ భావంలో ఉన్నాడు ({moon_label}).",
+        "ta": f"{chart_name} என்பது {meaning}க்காகப் பயன்படுத்தப்படுகிறது. Current divisional ascendant: {asc_label}; அந்த division-இல் சந்திரன் {moon_house_label}-ஆம் பாவத்தில் உள்ளது ({moon_label}).",
+    }.get(language, f"{chart_name} is used for {meaning}. Current divisional ascendant: {asc_label}; Moon falls in house {moon_house_label} in that division ({moon_label}).")
 
 
 def _focus_snapshot(payload: dict[str, Any], chart_name: str) -> dict[str, Any]:

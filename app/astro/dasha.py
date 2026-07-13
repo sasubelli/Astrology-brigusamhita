@@ -128,6 +128,31 @@ def upcoming_antardashas(
     return upcoming
 
 
+def active_dasha_at(
+    dashas: dict[str, Any],
+    birth_local: datetime,
+    from_moment: datetime,
+) -> dict[str, Any] | None:
+    for md in dashas["mahadashas"]:
+        md_start = datetime.fromisoformat(md["start"])
+        md_end = datetime.fromisoformat(md["end"])
+        if md_start <= from_moment <= md_end:
+            subs = antardashas_for_mahadasha(md, birth_local)
+            for sub in subs:
+                sub_start = datetime.fromisoformat(sub["start"])
+                sub_end = datetime.fromisoformat(sub["end"])
+                if sub_start <= from_moment <= sub_end:
+                    return {
+                        "mahadasha_lord": md["lord"],
+                        "antardasha_lord": sub["antardasha_lord"],
+                        "start": sub["start"],
+                        "end": sub["end"],
+                        "md_start": md["start"],
+                        "md_end": md["end"],
+                    }
+    return None
+
+
 def _period_dict(
     lord: str,
     start: datetime,

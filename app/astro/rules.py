@@ -10,11 +10,11 @@ The model follows a classical jyotisha reading order:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from app.astro.constants import HOUSE_THEMES, PLANET_KARAKAS, SIGN_LORDS
-from app.astro.dasha import compute_vimshottari, upcoming_antardashas, years_between
+from app.astro.dasha import active_dasha_at, compute_vimshottari, upcoming_antardashas, years_between
 
 KENDRA = {1, 4, 7, 10}
 TRIKONA = {1, 5, 9}
@@ -28,6 +28,7 @@ def build_prediction(chart: dict[str, Any], now: datetime | None = None) -> dict
     planets = chart["planets"]
     dashas = compute_vimshottari(birth_local, planets["Moon"]["longitude"])
     upcoming = upcoming_antardashas(dashas, birth_local, current_moment, count=18)
+    monthly = _monthly_forecast(chart, dashas, current_moment, months=120)
 
     return {
         "birth": chart["birth"],
@@ -35,6 +36,7 @@ def build_prediction(chart: dict[str, Any], now: datetime | None = None) -> dict
         "ascendant": chart["ascendant"],
         "panchanga": chart["panchanga"],
         "planets": chart["planets"],
+        "divisional_charts": chart.get("divisional_charts", {}),
         "house_signs": chart["house_signs"],
         "sutra_trace": _sutra_trace(chart),
         "core_reading": _core_reading(chart),
@@ -42,6 +44,7 @@ def build_prediction(chart: dict[str, Any], now: datetime | None = None) -> dict
         "life_areas": _life_areas(chart),
         "dashas": dashas,
         "future_timeline": [_period_forecast(chart, period) for period in upcoming],
+        "monthly_timeline": monthly,
         "remedies": _remedies(chart, upcoming[0] if upcoming else None),
         "disclaimer": (
             "Astrology readings are interpretive and spiritual. Use this for reflection, "
@@ -306,6 +309,34 @@ def _period_forecast(chart: dict[str, Any], period: dict[str, Any]) -> dict[str,
     }
 
 
+def _monthly_forecast(chart: dict[str, Any], dashas: dict[str, Any], start_moment: datetime, months: int = 120) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    current = start_moment
+    birth_local = datetime.fromisoformat(chart["birth"]["local_datetime"])
+    for _ in range(months):
+        active = active_dasha_at(dashas, birth_local, current) or {"mahadasha_lord": "", "antardasha_lord": "", "start": current.isoformat(), "end": current.isoformat()}
+        md = active["mahadasha_lord"] or "Unknown"
+        ad = active["antardasha_lord"] or "Unknown"
+        md_pos = chart["planets"].get(md, chart["planets"]["Sun"])
+        ad_pos = chart["planets"].get(ad, chart["planets"]["Moon"])
+        opportunity = (
+            f"{md} mahadasha and {ad} antardasha activate house {md_pos['house']} ({HOUSE_THEMES[md_pos['house']]}) "
+            f"and house {ad_pos['house']} ({HOUSE_THEMES[ad_pos['house']]})."
+        )
+        items.append(
+            {
+                "month": current.strftime("%b %Y"),
+                "period": f"{md} / {ad}",
+                "age": f"{years_between(datetime.fromisoformat(chart['birth']['local_datetime']), current):.1f}",
+                "opportunity": opportunity,
+                "watch": _period_challenge(md_pos, ad_pos),
+                "practice": _planet_practice(ad if ad in chart["planets"] else "Moon", ad_pos),
+            }
+        )
+        current = current + timedelta(days=30)
+    return items
+
+
 def _period_challenge(md_pos: dict[str, Any], ad_pos: dict[str, Any]) -> str:
     houses = {md_pos["house"], ad_pos["house"]}
     if houses & DUSTHANA:
@@ -416,4 +447,3 @@ def _mutual_seventh(a: dict[str, Any], b: dict[str, Any]) -> bool:
 
 def _related(a: dict[str, Any], b: dict[str, Any]) -> bool:
     return _same_sign(a, b) or _mutual_seventh(a, b) or a["house"] in KENDRA | TRIKONA or b["house"] in KENDRA | TRIKONA
-
