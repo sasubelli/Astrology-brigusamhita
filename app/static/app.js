@@ -139,7 +139,7 @@ function renderReport(data) {
       <div class="chat-shell">
         <div class="chat-log" id="chatLog">
           <div class="chat-bubble bot">
-            Ask about lagna, moon, dasha, marriage, career, or remedies. Type in English, Hindi, Telugu, or Tamil and I will answer in the same language using the live chart and a short sloka.
+            Ask about lagna, moon, dasha, marriage, career, or remedies. I use the live chart plus locally retrieved Brihat Parashara Hora Shastra passages, presented through a Kerala Jyothish-oriented lens. Type in English, Hindi, Telugu, or Tamil.
           </div>
         </div>
         <form id="chatForm" class="chat-form">
@@ -283,7 +283,7 @@ function bindChat(chartData) {
       if (!response.ok) throw new Error(data.detail || "Chat reply failed");
       appendBubble(
         logEl,
-        `${data.answer}<br><br><strong>Sloka:</strong> ${escapeHtml(data.sloka)}<br><strong>Transliteration:</strong> ${escapeHtml(data.transliteration)}`,
+        `${escapeHtml(data.answer)}<br><br><strong>Sloka:</strong> ${escapeHtml(data.sloka)}<br><strong>Transliteration:</strong> ${escapeHtml(data.transliteration)}${renderSources(data.sources)}`,
         "bot",
       );
       chatHistory.push({ role: "assistant", content: data.answer, sloka: data.sloka, transliteration: data.transliteration });
@@ -296,6 +296,13 @@ function bindChat(chartData) {
       formEl.querySelector("button").disabled = false;
     }
   };
+}
+
+function renderSources(sources) {
+  if (!Array.isArray(sources) || !sources.length) return "";
+  return `<br><br><strong>BPHS sources:</strong><ul class="source-list">${sources
+    .map((source) => `<li><strong>${escapeHtml(source.citation)}</strong><br>${escapeHtml(source.excerpt)}</li>`)
+    .join("")}</ul>`;
 }
 
 function appendBubble(container, text, kind) {
