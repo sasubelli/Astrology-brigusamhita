@@ -14,9 +14,6 @@ from pathlib import Path
 import re
 from typing import Iterable
 
-from pypdf import PdfReader
-
-
 REFERENCE_DIR = Path(__file__).resolve().parents[1] / "data" / "references"
 MAX_QUERY_TERMS = 18
 CHUNK_SIZE = 1_250
@@ -83,6 +80,11 @@ def format_retrieval_context(matches: Iterable[dict[str, object]]) -> str:
 
 @lru_cache(maxsize=1)
 def _load_corpus() -> tuple[SourceChunk, ...]:
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        return tuple()
+
     files = (
         ("BPHS (R. Santhanam, complete edition)", REFERENCE_DIR / "bphs-complete-r-santhanam.pdf"),
         ("BPHS Volume 2 (R. Santhanam)", REFERENCE_DIR / "bphs-volume-2-r-santhanam.pdf"),

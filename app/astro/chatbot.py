@@ -92,6 +92,7 @@ def answer_chat(
             + "; ".join(str(source["citation"]) for source in sources)
             + "."
         )
+    answer_lines.append(_divisional_summary_line(resolved_language, payload))
     answer_lines.append(lang["closing"])
 
     sloka, translit = _sloka_for_topic(topic, payload, resolved_language)
@@ -112,6 +113,7 @@ def answer_chat(
             "d10": _focus_snapshot(payload, "D10"),
             "d12": _focus_snapshot(payload, "D12"),
         },
+        "divisional_highlights": _divisional_highlights(payload),
     }
 
 
@@ -124,14 +126,6 @@ def _resolve_language(language: str, question: str, history: list[dict[str, Any]
         return "te"
     if _contains_script(question, "ta"):
         return "ta"
-    for item in reversed(history[-4:]):
-        content = str(item.get("content", ""))
-        if _contains_script(content, "hi"):
-            return "hi"
-        if _contains_script(content, "te"):
-            return "te"
-        if _contains_script(content, "ta"):
-            return "ta"
     return "en"
 
 
@@ -376,6 +370,67 @@ def _focus_snapshot(payload: dict[str, Any], chart_name: str) -> dict[str, Any]:
         "moon_sign": moon.get("sign_sanskrit", moon.get("sign", "")),
         "moon_house": moon.get("house", None),
     }
+
+
+def _divisional_highlights(payload: dict[str, Any]) -> dict[str, dict[str, object]]:
+    labels = {
+        "d1": "Base chart",
+        "d2": "Wealth and speech",
+        "d6": "Health and resistance",
+        "d9": "Dharma and maturity",
+        "d10": "Career and public work",
+        "d11": "Gains and fulfilment",
+        "d12": "Ancestral and inner memory",
+    }
+    return {key: _highlight_snapshot(payload, key.upper(), label) for key, label in labels.items()}
+
+
+def _highlight_snapshot(payload: dict[str, Any], chart_name: str, label: str) -> dict[str, object]:
+    chart = payload.get(chart_name.lower(), {})
+    asc = chart.get("ascendant", {})
+    moon = chart.get("planets", {}).get("Moon", {})
+    sun = chart.get("planets", {}).get("Sun", {})
+    return {
+        "label": label,
+        "ascendant": asc.get("sign_sanskrit", asc.get("sign", "")),
+        "moon": moon.get("sign_sanskrit", moon.get("sign", "")),
+        "sun": sun.get("sign_sanskrit", sun.get("sign", "")),
+    }
+
+
+def _divisional_summary_line(language: str, payload: dict[str, Any]) -> str:
+    highlights = _divisional_highlights(payload)
+    d1 = highlights.get("d1", {})
+    d9 = highlights.get("d9", {})
+    d10 = highlights.get("d10", {})
+    d12 = highlights.get("d12", {})
+    templates = {
+        "en": (
+            f"D1 anchors the life pattern in {d1.get('ascendant', 'unknown')}, "
+            f"D9 refines dharma through {d9.get('ascendant', 'unknown')}, "
+            f"D10 shows work through {d10.get('ascendant', 'unknown')}, and "
+            f"D12 reveals inner memory through {d12.get('ascendant', 'unknown')}."
+        ),
+        "hi": (
+            f"D1 जीवन-पैटर्न को {d1.get('ascendant', 'unknown')} से दिखाता है, "
+            f"D9 धर्म को {d9.get('ascendant', 'unknown')} से refine करता है, "
+            f"D10 काम को {d10.get('ascendant', 'unknown')} से दिखाता है, और "
+            f"D12 भीतरी स्मृति को {d12.get('ascendant', 'unknown')} से दिखाता है।"
+        ),
+        "te": (
+            f"D1 జీవన-pattern ను {d1.get('ascendant', 'unknown')} లో నిలుపుతుంది, "
+            f"D9 ధర్మాన్ని {d9.get('ascendant', 'unknown')} ద్వారా refine చేస్తుంది, "
+            f"D10 పనిని {d10.get('ascendant', 'unknown')} ద్వారా చూపిస్తుంది, మరియు "
+            f"D12 అంతర్గత జ్ఞాపకాన్ని {d12.get('ascendant', 'unknown')} ద్వారా తెలియజేస్తుంది."
+        ),
+        "ta": (
+            f"D1 வாழ்க்கை-pattern ஐ {d1.get('ascendant', 'unknown')} மூலம் காட்டுகிறது, "
+            f"D9 தர்மத்தை {d9.get('ascendant', 'unknown')} மூலம் மேம்படுத்துகிறது, "
+            f"D10 பணியை {d10.get('ascendant', 'unknown')} மூலம் காட்டுகிறது, மற்றும் "
+            f"D12 உள்ளார்ந்த நினைவைக் {d12.get('ascendant', 'unknown')} மூலம் வெளிப்படுத்துகிறது."
+        ),
+    }
+    return templates.get(language, templates["en"])
 
 
 def _localized_dasha_line(language: str, lord: str) -> str:

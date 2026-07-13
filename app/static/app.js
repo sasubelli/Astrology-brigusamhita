@@ -69,6 +69,7 @@ form.addEventListener("submit", async (event) => {
 });
 
 function renderReport(data) {
+  chatHistory = [];
   emptyState.classList.add("hidden");
   reportEl.classList.remove("hidden");
   reportEl.classList.remove("error");
