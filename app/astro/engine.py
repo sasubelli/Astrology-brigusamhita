@@ -91,6 +91,7 @@ def build_chart(payload: Any) -> dict[str, Any]:
     for house in range(1, 13):
         sign_index = (asc_sign_index + house - 1) % 12
         lord = SIGN_LORDS[sign_index]
+        occupants = [name for name, pos in planets.items() if pos.house == house]
         house_signs.append(
             {
                 "house": house,
@@ -99,6 +100,7 @@ def build_chart(payload: Any) -> dict[str, Any]:
                 "lord": lord,
                 "theme": HOUSE_THEMES[house],
                 "lord_house": planets[lord].house if lord in planets else None,
+                "occupants": occupants,
             }
         )
 

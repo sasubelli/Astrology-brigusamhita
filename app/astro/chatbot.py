@@ -12,6 +12,9 @@ import json
 import os
 import shutil
 import subprocess
+import urllib.error
+import urllib.parse
+import urllib.request
 from typing import Any
 
 from app.astro.retrieval import format_retrieval_context, retrieve_bphs_context
@@ -83,7 +86,7 @@ def answer_chat(
         return local_model
 
     answer_lines = [lang["prefix"]]
-    answer_lines.extend(_compose_topic_answer(topic, payload, resolved_language))
+    answer_lines.extend(_compose_topic_answer(topic, payload, chart or {}, resolved_language))
     if payload.get("dasha_lord"):
         answer_lines.append(_localized_dasha_line(resolved_language, payload["dasha_lord"]))
     if sources:
@@ -92,7 +95,7 @@ def answer_chat(
             + "; ".join(str(source["citation"]) for source in sources)
             + "."
         )
-    answer_lines.append(_divisional_summary_line(resolved_language, payload))
+    answer_lines.append(_divisional_summary_line(resolved_language, payload, topic))
     answer_lines.append(lang["closing"])
 
     sloka, translit = _sloka_for_topic(topic, payload, resolved_language)
@@ -172,23 +175,12 @@ def _run_local_model(
     history: list[dict[str, Any]],
     sources: list[dict[str, object]],
 ) -> dict[str, Any] | None:
-    if not shutil.which("ollama"):
+    provider = _preferred_llm_provider()
+    if not provider:
         return None
-
     model = os.getenv("ASTRO_CHAT_MODEL", "llama3.1")
     prompt = _build_model_prompt(question, language, chart or {}, plan, payload, history, sources)
-    try:
-        completed = subprocess.run(
-            ["ollama", "run", model, prompt],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except (subprocess.SubprocessError, OSError):
-        return None
-
-    raw = completed.stdout.strip()
+    raw = _call_llm_provider(provider, model, prompt)
     if not raw:
         return None
 
@@ -211,7 +203,100 @@ def _run_local_model(
             "d12": _focus_snapshot(payload, "D12"),
         },
         "model": model,
+        "provider": provider,
     }
+
+
+def _preferred_llm_provider() -> str | None:
+    if shutil.which("ollama") and os.getenv("ASTRO_LLM_PROVIDER", "ollama") == "ollama":
+        return "ollama"
+    provider = os.getenv("ASTRO_LLM_PROVIDER", "").strip().lower()
+    if provider in {"openai", "gemini"}:
+        return provider
+    if os.getenv("OPENAI_API_KEY"):
+        return "openai"
+    if os.getenv("GEMINI_API_KEY"):
+        return "gemini"
+    return None
+
+
+def _call_llm_provider(provider: str, model: str, prompt: str) -> str | None:
+    try:
+        if provider == "ollama":
+            completed = subprocess.run(
+                ["ollama", "run", model, prompt],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            return completed.stdout.strip()
+        if provider == "openai":
+            return _call_openai(model, prompt)
+        if provider == "gemini":
+            return _call_gemini(model, prompt)
+    except (subprocess.SubprocessError, OSError, urllib.error.URLError, TimeoutError, ValueError):
+        return None
+    return None
+
+
+def _call_openai(model: str, prompt: str) -> str | None:
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        return None
+    payload = {
+        "model": model,
+        "input": prompt,
+    }
+    request = urllib.request.Request(
+        "https://api.openai.com/v1/responses",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    return _extract_openai_text(data)
+
+
+def _extract_openai_text(data: dict[str, Any]) -> str | None:
+    if isinstance(data.get("output_text"), str) and data["output_text"].strip():
+        return data["output_text"].strip()
+    for item in data.get("output", []):
+        for content in item.get("content", []):
+            if content.get("type") == "output_text" and content.get("text"):
+                return str(content["text"]).strip()
+    return None
+
+
+def _call_gemini(model: str, prompt: str) -> str | None:
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        return None
+    endpoint = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{urllib.parse.quote(model, safe='')}:generateContent?key={urllib.parse.quote(api_key)}"
+    )
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+    }
+    request = urllib.request.Request(
+        endpoint,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    for candidate in data.get("candidates", []):
+        content = candidate.get("content", {})
+        for part in content.get("parts", []):
+            if part.get("text"):
+                return str(part["text"]).strip()
+    return None
 
 
 def _build_model_prompt(
@@ -223,6 +308,12 @@ def _build_model_prompt(
     history: list[dict[str, Any]],
     sources: list[dict[str, object]],
 ) -> str:
+    language_labels = {
+        "en": "English",
+        "hi": "Hindi",
+        "te": "Telugu",
+        "ta": "Tamil",
+    }
     chart_summary = {
         "ascendant": chart.get("ascendant", {}),
         "moon": chart.get("planets", {}).get("Moon", {}),
@@ -242,7 +333,15 @@ def _build_model_prompt(
     }
     instruction = {
         "language": language,
-        "style": "Give a concise Kerala Jyothish-oriented reading. Ground chart claims only in the supplied chart data and ground classical claims only in the retrieved BPHS excerpts. Do not invent facts or claim certainty. Cite each used source as [BPHS..., p. N]. Mention relevant divisional charts by name. Include one short sloka in Sanskrit or the selected language, then a transliteration.",
+        "style": (
+            "Give a concise Kerala Jyothish-oriented reading. "
+            "Answer only in the selected language. If the question is in another language, translate the answer into the selected language. "
+            "Ground chart claims only in the supplied chart data and ground classical claims only in the retrieved BPHS excerpts. "
+            "Do not invent facts or claim certainty. Cite each used source as [BPHS..., p. N]. "
+            "Mention the relevant divisional charts by name and explain how the question maps to them. "
+            "Include one short sloka in Sanskrit or the selected language, then a transliteration."
+        ),
+        "selected_language_name": language_labels.get(language, "English"),
         "question": question,
         "plan": plan,
         "history": history[-6:],
@@ -273,49 +372,50 @@ def _extract_chart_payload(chart: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _compose_topic_answer(topic: str, payload: dict[str, Any], language: str) -> list[str]:
+def _compose_topic_answer(topic: str, payload: dict[str, Any], chart: dict[str, Any], language: str) -> list[str]:
     pieces: list[str] = []
     asc = payload.get("ascendant", {})
     moon = payload.get("moon", {})
 
     if topic == "lagna":
         pieces.append(_phrase(language, "lagna", asc, moon))
-        pieces.append(_chart_note(language, "D1", payload.get("d1", {}), "core temperament and life direction"))
-        pieces.append(_chart_note(language, "D9", payload.get("d9", {}), "maturity and dharma"))
+        pieces.append(_house_focus(language, payload, chart, 1, "D1", "core temperament and life direction"))
+        pieces.append(_house_focus(language, payload, chart, 9, "D9", "maturity and dharma"))
     elif topic == "moon":
         pieces.append(_phrase(language, "moon", asc, moon))
-        pieces.append(_chart_note(language, "D1", payload.get("d1", {}), "emotional baseline"))
-        pieces.append(_chart_note(language, "D12", payload.get("d12", {}), "ancestral and subconscious memory"))
+        pieces.append(_planet_focus(language, payload, "Moon", "emotional baseline"))
+        pieces.append(_house_focus(language, payload, chart, 12, "D12", "ancestral and subconscious memory"))
     elif topic == "dasha":
         pieces.append(_phrase(language, "dasha", asc, moon))
-        pieces.append(_chart_note(language, "D10", payload.get("d10", {}), "career activation through timing"))
+        pieces.append(_dasha_focus(language, payload))
+        pieces.append(_house_focus(language, payload, chart, 10, "D10", "career activation through timing"))
     elif topic == "marriage":
-        pieces.append(_chart_note(language, "D1", payload.get("d1", {}), "spouse interaction in the base chart"))
-        pieces.append(_chart_note(language, "D9", payload.get("d9", {}), "marriage dharma and relationship maturity"))
+        pieces.append(_house_focus(language, payload, chart, 7, "D1", "spouse interaction in the base chart"))
+        pieces.append(_house_focus(language, payload, chart, 9, "D9", "marriage dharma and relationship maturity"))
     elif topic == "career":
-        pieces.append(_chart_note(language, "D1", payload.get("d1", {}), "general profession and house axis"))
-        pieces.append(_chart_note(language, "D10", payload.get("d10", {}), "career structure and public role"))
+        pieces.append(_house_focus(language, payload, chart, 10, "D10", "career structure and public role"))
+        pieces.append(_house_focus(language, payload, chart, 6, "D1", "work pressure, service, and competition"))
     elif topic == "children":
-        pieces.append(_chart_note(language, "D1", payload.get("d1", {}), "children significations in the base chart"))
-        pieces.append(_chart_note(language, "D9", payload.get("d9", {}), "blessing, merit, and generational dharma"))
+        pieces.append(_house_focus(language, payload, chart, 5, "D1", "children significations in the base chart"))
+        pieces.append(_house_focus(language, payload, chart, 9, "D9", "blessing, merit, and generational dharma"))
     elif topic == "wealth":
-        pieces.append(_chart_note(language, "D2", payload.get("d2", {}), "speech, accumulation, and family resources"))
-        pieces.append(_chart_note(language, "D11", payload.get("d11", {}), "income and fulfillment patterns"))
+        pieces.append(_house_focus(language, payload, chart, 2, "D2", "speech, accumulation, and family resources"))
+        pieces.append(_house_focus(language, payload, chart, 11, "D11", "income and fulfillment patterns"))
     elif topic == "health":
-        pieces.append(_chart_note(language, "D1", payload.get("d1", {}), "body and vitality"))
-        pieces.append(_chart_note(language, "D6", payload.get("d6", {}), "routine, resistance, and recovery"))
+        pieces.append(_house_focus(language, payload, chart, 1, "D1", "body and vitality"))
+        pieces.append(_house_focus(language, payload, chart, 6, "D6", "routine, resistance, and recovery"))
     elif topic == "remedy":
         pieces.append(_localized_remedy_line(language))
-        pieces.append(_chart_note(language, "D12", payload.get("d12", {}), "what to release or simplify"))
+        pieces.append(_house_focus(language, payload, chart, 12, "D12", "what to release or simplify"))
     elif topic == "spiritual":
-        pieces.append(_chart_note(language, "D9", payload.get("d9", {}), "dharma and guru connection"))
-        pieces.append(_chart_note(language, "D12", payload.get("d12", {}), "retreat, release, and inward practice"))
+        pieces.append(_house_focus(language, payload, chart, 9, "D9", "dharma and guru connection"))
+        pieces.append(_house_focus(language, payload, chart, 12, "D12", "retreat, release, and inward practice"))
     else:
         pieces.append(_phrase(language, "general", asc, moon))
         pieces.append(_chart_anchor_line(language, payload))
-        pieces.append(_chart_note(language, "D1", payload.get("d1", {}), "life theme"))
-        pieces.append(_chart_note(language, "D9", payload.get("d9", {}), "dharma refinement"))
-        pieces.append(_chart_note(language, "D10", payload.get("d10", {}), "public work"))
+        pieces.append(_house_focus(language, payload, chart, 1, "D1", "life theme"))
+        pieces.append(_house_focus(language, payload, chart, 9, "D9", "dharma refinement"))
+        pieces.append(_house_focus(language, payload, chart, 10, "D10", "public work"))
     return pieces
 
 
@@ -394,6 +494,90 @@ def _chart_note(language: str, chart_name: str, chart: dict[str, Any], meaning: 
     }.get(language, f"{chart_name} is used for {meaning}. Current divisional ascendant: {asc_label}; Moon falls in house {moon_house_label} in that division ({moon_label}).")
 
 
+def _house_focus(language: str, payload: dict[str, Any], chart: dict[str, Any], house: int, chart_name: str, meaning: str) -> str:
+    house_info = _base_house_info(chart, house)
+    division = payload.get(chart_name.lower(), {})
+    div_asc = division.get("ascendant", {})
+    div_moon = division.get("planets", {}).get("Moon", {})
+    base = _localized_house_focus(language, house_info, chart_name, meaning)
+    division_note = {
+        "en": (
+            f" {chart_name} shows {div_asc.get('sign_sanskrit', div_asc.get('sign', 'unknown'))} ascendant "
+            f"and Moon in house {div_moon.get('house', '?')}."
+        ),
+        "hi": (
+            f" {chart_name} में {div_asc.get('sign_sanskrit', div_asc.get('sign', 'unknown'))} लग्न और "
+            f"चंद्र {div_moon.get('house', '?')}वें भाव में है।"
+        ),
+        "te": (
+            f" {chart_name}లో {div_asc.get('sign_sanskrit', div_asc.get('sign', 'unknown'))} లగ్నం మరియు "
+            f"చంద్రుడు {div_moon.get('house', '?')}వ భావంలో ఉన్నాడు."
+        ),
+        "ta": (
+            f" {chart_name}இல் {div_asc.get('sign_sanskrit', div_asc.get('sign', 'unknown'))} லக்னம் மற்றும் "
+            f"சந்திரன் {div_moon.get('house', '?')}-ஆம் பாவத்தில் உள்ளது."
+        ),
+    }.get(language, "")
+    return base + division_note
+
+
+def _planet_focus(language: str, payload: dict[str, Any], planet_name: str, meaning: str) -> str:
+    planet = payload.get(planet_name.lower(), {}) or payload.get(planet_name.capitalize(), {})
+    if not planet:
+        planet = {}
+    return {
+        "en": (
+            f"{planet_name} is in {planet.get('sign_sanskrit', planet.get('sign', 'unknown'))} "
+            f"house {planet.get('house', '?')} with {planet.get('nakshatra', 'unknown')} pada {planet.get('pada', '?')}, "
+            f"so it colors {meaning} directly."
+        ),
+        "hi": (
+            f"{planet_name} {planet.get('sign_sanskrit', planet.get('sign', 'unknown'))} में {planet.get('house', '?')}वें भाव में "
+            f"{planet.get('nakshatra', 'unknown')} पाद {planet.get('pada', '?')} के साथ है, इसलिए यह {meaning} को सीधे रंग देता है।"
+        ),
+        "te": (
+            f"{planet_name} {planet.get('sign_sanskrit', planet.get('sign', 'unknown'))}లో {planet.get('house', '?')}వ భావంలో "
+            f"{planet.get('nakshatra', 'unknown')} పాద {planet.get('pada', '?')}తో ఉంది, కాబట్టి ఇది {meaning}ను నేరుగా ప్రభావితం చేస్తుంది."
+        ),
+        "ta": (
+            f"{planet_name} {planet.get('sign_sanskrit', planet.get('sign', 'unknown'))} இல் {planet.get('house', '?')}-ஆம் பாவத்தில் "
+            f"{planet.get('nakshatra', 'unknown')} பாத {planet.get('pada', '?')} உடன் உள்ளது, ஆகவே இது {meaning}யை நேரடியாக நிறமூட்டுகிறது."
+        ),
+    }.get(language, "")
+
+
+def _dasha_focus(language: str, payload: dict[str, Any]) -> str:
+    lord = payload.get("dasha_lord") or "unknown"
+    return {
+        "en": f"The current dasha focus is {lord}; timing should be judged by the houses it owns and occupies in the base chart.",
+        "hi": f"वर्तमान दशा फोकस {lord} है; समय-फल उसके स्वामित्व और स्थिति वाले भावों से पढ़ना चाहिए।",
+        "te": f"ప్రస్తుత దశా ఫోకస్ {lord}; సమయ ఫలితం అది కలిగిన మరియు ఉన్న భావాల ద్వారా చదవాలి.",
+        "ta": f"தற்போதைய தசா கவனம் {lord}; அதன் own-ஆன மற்றும் இருப்பிட பாவங்களின் மூலம் கால விளைவு வாசிக்க வேண்டும்.",
+    }.get(language, f"The current dasha focus is {lord}.")
+
+
+def _base_house_info(chart: dict[str, Any], house: int) -> dict[str, Any]:
+    for item in chart.get("house_signs", []):
+        if item.get("house") == house:
+            return item
+    return {}
+
+
+def _localized_house_focus(language: str, house_info: dict[str, Any], chart_name: str, meaning: str) -> str:
+    sign = house_info.get("sign_sanskrit", house_info.get("sign", "unknown"))
+    lord = house_info.get("lord", "unknown")
+    house = house_info.get("house", "?")
+    occupants = house_info.get("occupants", [])
+    occupant_text = ", ".join(occupants) if occupants else "no planets"
+    templates = {
+        "en": f"House {house} in D1 is {sign}, ruled by {lord}, with {occupant_text}; this is the chart basis for {meaning}.",
+        "hi": f"D1 में भाव {house} {sign} है, इसका स्वामी {lord} है, और इसमें {occupant_text} हैं; यही {meaning} का आधार है।",
+        "te": f"D1లో {house}వ భావం {sign}, దాని అధిపతి {lord}, ఇందులో {occupant_text} ఉన్నాయి; ఇదే {meaning}కి ఆధారం.",
+        "ta": f"D1-இல் {house}-ஆம் பாவம் {sign}, அதன் அதிபதி {lord}, இதில் {occupant_text} உள்ளனர்; இதுவே {meaning}க்கான அடிப்படை.",
+    }
+    return templates.get(language, templates["en"])
+
+
 def _focus_snapshot(payload: dict[str, Any], chart_name: str) -> dict[str, Any]:
     chart = payload.get(chart_name.lower(), {})
     asc = chart.get("ascendant", {})
@@ -431,39 +615,71 @@ def _highlight_snapshot(payload: dict[str, Any], chart_name: str, label: str) ->
     }
 
 
-def _divisional_summary_line(language: str, payload: dict[str, Any]) -> str:
+def _divisional_summary_line(language: str, payload: dict[str, Any], topic: str) -> str:
     highlights = _divisional_highlights(payload)
     d1 = highlights.get("d1", {})
     d9 = highlights.get("d9", {})
     d10 = highlights.get("d10", {})
     d12 = highlights.get("d12", {})
+    d2 = highlights.get("d2", {})
+    d6 = highlights.get("d6", {})
+    d11 = highlights.get("d11", {})
+    d7 = _highlight_snapshot(payload, "D1", "Relationship axis")
     templates = {
-        "en": (
-            f"D1 anchors the life pattern in {d1.get('ascendant', 'unknown')}, "
-            f"D9 refines dharma through {d9.get('ascendant', 'unknown')}, "
-            f"D10 shows work through {d10.get('ascendant', 'unknown')}, and "
-            f"D12 reveals inner memory through {d12.get('ascendant', 'unknown')}."
-        ),
-        "hi": (
-            f"D1 जीवन-पैटर्न को {d1.get('ascendant', 'unknown')} से दिखाता है, "
-            f"D9 धर्म को {d9.get('ascendant', 'unknown')} से refine करता है, "
-            f"D10 काम को {d10.get('ascendant', 'unknown')} से दिखाता है, और "
-            f"D12 भीतरी स्मृति को {d12.get('ascendant', 'unknown')} से दिखाता है।"
-        ),
-        "te": (
-            f"D1 జీవన-pattern ను {d1.get('ascendant', 'unknown')} లో నిలుపుతుంది, "
-            f"D9 ధర్మాన్ని {d9.get('ascendant', 'unknown')} ద్వారా refine చేస్తుంది, "
-            f"D10 పనిని {d10.get('ascendant', 'unknown')} ద్వారా చూపిస్తుంది, మరియు "
-            f"D12 అంతర్గత జ్ఞాపకాన్ని {d12.get('ascendant', 'unknown')} ద్వారా తెలియజేస్తుంది."
-        ),
-        "ta": (
-            f"D1 வாழ்க்கை-pattern ஐ {d1.get('ascendant', 'unknown')} மூலம் காட்டுகிறது, "
-            f"D9 தர்மத்தை {d9.get('ascendant', 'unknown')} மூலம் மேம்படுத்துகிறது, "
-            f"D10 பணியை {d10.get('ascendant', 'unknown')} மூலம் காட்டுகிறது, மற்றும் "
-            f"D12 உள்ளார்ந்த நினைவைக் {d12.get('ascendant', 'unknown')} மூலம் வெளிப்படுத்துகிறது."
-        ),
+        "en": {
+            "lagna": f"D1 confirms the base lagna in {d1.get('ascendant', 'unknown')} and D9 refines it through {d9.get('ascendant', 'unknown')}.",
+            "moon": f"D1 shows the base emotional field in {d1.get('ascendant', 'unknown')} while D12 carries the inner memory of {d12.get('ascendant', 'unknown')}.",
+            "dasha": f"Timing should be read mainly through D10 ({d10.get('ascendant', 'unknown')}) along with the running dasha lord.",
+            "marriage": f"Marriage is judged from the relationship axis and D9, with D1 reflecting the base pattern and D9 showing {d9.get('ascendant', 'unknown')}.",
+            "career": f"Career centers on D10 ({d10.get('ascendant', 'unknown')}) and the effort axis in D1 ({d1.get('ascendant', 'unknown')}).",
+            "children": f"Children and blessing are read from D1 and D9, with D9 showing {d9.get('ascendant', 'unknown')} and the merit axis refining outcomes.",
+            "wealth": f"Wealth is read from D2 ({d2.get('ascendant', 'unknown')}) and D11 ({d11.get('ascendant', 'unknown')}).",
+            "health": f"Health is judged by D1 ({d1.get('ascendant', 'unknown')}) and D6 ({d6.get('ascendant', 'unknown')}).",
+            "remedy": f"Release and simplification are clearer in D12 ({d12.get('ascendant', 'unknown')}) while the current dasha shows the active pressure.",
+            "spiritual": f"Spiritual growth is refined by D9 ({d9.get('ascendant', 'unknown')}) and inward release in D12 ({d12.get('ascendant', 'unknown')}).",
+            "general": f"D1, D9, D10, and D12 remain the base sequence, but the strongest emphasis here is on D1 ({d1.get('ascendant', 'unknown')}) and D10 ({d10.get('ascendant', 'unknown')}).",
+        },
+        "hi": {
+            "lagna": f"D1 में मूल लग्न {d1.get('ascendant', 'unknown')} है और D9 उसे {d9.get('ascendant', 'unknown')} से refine करता है।",
+            "moon": f"D1 में भावनात्मक आधार {d1.get('ascendant', 'unknown')} है और D12 में भीतरी स्मृति {d12.get('ascendant', 'unknown')} से मिलती है।",
+            "dasha": f"समय-फल मुख्यतः D10 ({d10.get('ascendant', 'unknown')}) और चल रही दशा से पढ़ना चाहिए।",
+            "marriage": f"विवाह संबंध-धुरी और D9 से पढ़ना चाहिए; D1 आधार दिखाता है और D9 {d9.get('ascendant', 'unknown')} देता है।",
+            "career": f"करियर का केंद्र D10 ({d10.get('ascendant', 'unknown')}) और D1 का प्रयास-अक्ष है।",
+            "children": f"संतान और पुण्य D1 तथा D9 से पढ़े जाते हैं, जहाँ D9 {d9.get('ascendant', 'unknown')} दिखाता है।",
+            "wealth": f"धन D2 ({d2.get('ascendant', 'unknown')}) और D11 ({d11.get('ascendant', 'unknown')}) से पढ़ा जाता है।",
+            "health": f"स्वास्थ्य D1 ({d1.get('ascendant', 'unknown')}) और D6 ({d6.get('ascendant', 'unknown')}) से देखा जाता है।",
+            "remedy": f"D12 ({d12.get('ascendant', 'unknown')}) में त्याग और सरलता स्पष्ट होती है।",
+            "spiritual": f"आध्यात्मिक उन्नति D9 ({d9.get('ascendant', 'unknown')}) और D12 ({d12.get('ascendant', 'unknown')}) से निखरती है।",
+            "general": f"D1, D9, D10, और D12 आधार क्रम हैं; यहाँ D1 ({d1.get('ascendant', 'unknown')}) और D10 ({d10.get('ascendant', 'unknown')}) प्रमुख हैं।",
+        },
+        "te": {
+            "lagna": f"D1 లో మూల లగ్నం {d1.get('ascendant', 'unknown')} మరియు D9 దాన్ని {d9.get('ascendant', 'unknown')} ద్వారా refine చేస్తుంది.",
+            "moon": f"D1 లో భావోద్వేగ ఆధారం {d1.get('ascendant', 'unknown')} మరియు D12 లో అంతర్గత జ్ఞాపకం {d12.get('ascendant', 'unknown')} ద్వారా తెలుస్తుంది.",
+            "dasha": f"సమయ ఫలం ప్రధానంగా D10 ({d10.get('ascendant', 'unknown')}) మరియు ప్రస్తుత దశ ద్వారా చదవాలి.",
+            "marriage": f"వివాహం సంబంధ-అక్షం మరియు D9 ద్వారా చదవాలి; D1 మూల pattern చూపుతుంది, D9 {d9.get('ascendant', 'unknown')} ఇస్తుంది.",
+            "career": f"కెరీర్ కేంద్రం D10 ({d10.get('ascendant', 'unknown')}) మరియు D1 లోని effort axis.",
+            "children": f"సంతానం మరియు blessing D1, D9 ద్వారా చదవాలి; D9 {d9.get('ascendant', 'unknown')} చూపిస్తుంది.",
+            "wealth": f"ధనం D2 ({d2.get('ascendant', 'unknown')}) మరియు D11 ({d11.get('ascendant', 'unknown')}) ద్వారా చదవాలి.",
+            "health": f"ఆరోగ్యం D1 ({d1.get('ascendant', 'unknown')}) మరియు D6 ({d6.get('ascendant', 'unknown')}) ద్వారా నిర్ణయించాలి.",
+            "remedy": f"D12 ({d12.get('ascendant', 'unknown')}) లో వదిలేయడం మరియు సరళత స్పష్టంగా ఉంటుంది.",
+            "spiritual": f"ఆధ్యాత్మిక growth D9 ({d9.get('ascendant', 'unknown')}) మరియు D12 ({d12.get('ascendant', 'unknown')}) ద్వారా మెరుగవుతుంది.",
+            "general": f"D1, D9, D10, D12 ప్రాథమిక క్రమం; ఇక్కడ D1 ({d1.get('ascendant', 'unknown')}) మరియు D10 ({d10.get('ascendant', 'unknown')}) ముఖ్యమైనవి.",
+        },
+        "ta": {
+            "lagna": f"D1-இல் அடிப்படை லக்னம் {d1.get('ascendant', 'unknown')}; D9 அதை {d9.get('ascendant', 'unknown')} மூலம் refine செய்கிறது.",
+            "moon": f"D1-இல் உணர்ச்சி அடித்தளம் {d1.get('ascendant', 'unknown')}; D12-இல் உள்ளார்ந்த நினைவு {d12.get('ascendant', 'unknown')} மூலம் தெரிகிறது.",
+            "dasha": f"கால விளைவு முதலில் D10 ({d10.get('ascendant', 'unknown')}) மற்றும் நடக்கும் தசா மூலம் பார்க்க வேண்டும்.",
+            "marriage": f"திருமணம் உறவு அச்சு மற்றும் D9 மூலம் பார்க்க வேண்டும்; D1 அடித்தளத்தையும் D9 {d9.get('ascendant', 'unknown')} யையும் காட்டுகிறது.",
+            "career": f"வேலைக்கு D10 ({d10.get('ascendant', 'unknown')}) மற்றும் D1-இன் effort axis முக்கியம்.",
+            "children": f"குழந்தைகள் மற்றும் blessing D1, D9 மூலம் வாசிக்க வேண்டும்; D9 {d9.get('ascendant', 'unknown')} காட்டுகிறது.",
+            "wealth": f"செல்வம் D2 ({d2.get('ascendant', 'unknown')}) மற்றும் D11 ({d11.get('ascendant', 'unknown')}) மூலம் வாசிக்க வேண்டும்.",
+            "health": f"ஆரோக்கியம் D1 ({d1.get('ascendant', 'unknown')}) மற்றும் D6 ({d6.get('ascendant', 'unknown')}) மூலம் தீர்மானிக்கப்படுகிறது.",
+            "remedy": f"D12 ({d12.get('ascendant', 'unknown')})-இல் விடுவித்தல் மற்றும் எளிமை தெளிவாக இருக்கும்.",
+            "spiritual": f"ஆன்மிக வளர்ச்சி D9 ({d9.get('ascendant', 'unknown')}) மற்றும் D12 ({d12.get('ascendant', 'unknown')}) மூலம் மேம்படும்.",
+            "general": f"D1, D9, D10, D12 அடிப்படை வரிசை; இங்கு D1 ({d1.get('ascendant', 'unknown')}) மற்றும் D10 ({d10.get('ascendant', 'unknown')}) முக்கியம்.",
+        },
     }
-    return templates.get(language, templates["en"])
+    return templates.get(language, templates["en"]).get(topic, templates.get(language, templates["en"])["general"])
 
 
 def _localized_dasha_line(language: str, lord: str) -> str:

@@ -208,6 +208,11 @@ input:focus {
   gap: 10px;
 }
 
+.chart-shell {
+  display: grid;
+  gap: 10px;
+}
+
 .chart-toolbar {
   display: inline-flex;
   gap: 8px;
@@ -305,9 +310,14 @@ input:focus {
   gap: 4px;
 }
 
-.south-cell.h5 {
-  grid-column: 2 / span 2;
-  grid-row: 2;
+.south-cell.lagna {
+  border-color: var(--teal);
+  box-shadow: inset 0 0 0 1px rgba(14, 111, 104, 0.12);
+}
+
+.south-empty {
+  border: 1px dashed transparent;
+  background: transparent;
 }
 
 .wheel-chart {
@@ -356,8 +366,13 @@ input:focus {
   text-align: center;
 }
 
+.wheel-segment.asc .wheel-label {
+  color: var(--saffron);
+}
+
 .wheel-label,
-.wheel-planets {
+.wheel-planets,
+.wheel-degree {
   display: block;
   max-width: 28%;
   font-size: 11px;
@@ -372,6 +387,11 @@ input:focus {
 .wheel-planets {
   margin-top: 4px;
   color: #41545b;
+}
+
+.wheel-degree {
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .section {

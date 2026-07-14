@@ -9,6 +9,22 @@ const chatStatus = document.querySelector("#chatStatus");
 let chatHistory = [];
 let chatLanguage = localStorage.getItem("astro-chat-language") || "auto";
 let placeCache = [];
+let chartStyle = "north";
+
+const zodiacSigns = [
+  "Aries",
+  "Taurus",
+  "Gemini",
+  "Cancer",
+  "Leo",
+  "Virgo",
+  "Libra",
+  "Scorpio",
+  "Sagittarius",
+  "Capricorn",
+  "Aquarius",
+  "Pisces",
+];
 
 const chartSlots = [
   [12, 1, 1],
@@ -23,6 +39,13 @@ const chartSlots = [
   [8, 4, 2],
   [7, 4, 3],
   [6, 4, 4],
+];
+
+const southSignLayout = [
+  [0, 1, 2, 3],
+  [11, null, null, 4],
+  [10, null, null, 5],
+  [9, 8, 7, 6],
 ];
 
 async function loadPlaces(query = "") {
@@ -98,7 +121,14 @@ function renderReport(data) {
 
   reportEl.innerHTML = `
     <section class="section summary-band">
-      ${renderChartBlock(data)}
+      <div class="chart-shell">
+        <div class="chart-toolbar">
+          <button type="button" class="chart-tab active" data-style="north">North</button>
+          <button type="button" class="chart-tab" data-style="south">South</button>
+          <button type="button" class="chart-tab" data-style="wheel">360</button>
+        </div>
+        <div id="chartViewport">${renderChartByStyle(data, chartStyle)}</div>
+      </div>
       <div>
         <h2>${escapeHtml(data.birth.name)}</h2>
         <div class="meta-grid">
@@ -187,10 +217,7 @@ function renderReport(data) {
   `;
 
   bindChat(data);
-}
-
-function renderChartBlock(data) {
-  return renderNorthChart(data);
+  bindChartMode(data);
 }
 
 function renderNorthChart(data) {
@@ -214,6 +241,81 @@ function renderNorthChart(data) {
   return `<div class="chart-grid" aria-label="North Indian style birth chart">
     ${cells}
     <div class="chart-center">North Indian<br>Rasi Chart</div>
+  </div>`;
+}
+
+function bindChartMode(data) {
+  const viewport = reportEl.querySelector("#chartViewport");
+  const tabs = reportEl.querySelectorAll("[data-style]");
+  if (!viewport || !tabs.length) return;
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      chartStyle = tab.dataset.style || "north";
+      viewport.innerHTML = renderChartByStyle(data, chartStyle);
+      tabs.forEach((item) => item.classList.toggle("active", item === tab));
+    });
+  });
+}
+
+function renderChartByStyle(data, style) {
+  if (style === "south") return renderSouthChart(data);
+  if (style === "wheel") return renderWheelChart(data);
+  return renderNorthChart(data);
+}
+
+function renderSouthChart(data) {
+  const bySign = {};
+  for (const [name, planet] of Object.entries(data.planets)) {
+    bySign[planet.sign_index] ||= [];
+    bySign[planet.sign_index].push(`${name} ${planet.degree_in_sign.toFixed(1)}°`);
+  }
+  const ascSign = data.ascendant.sign_index;
+  const cells = southSignLayout.flat().map((signIndex, index) => {
+    if (signIndex === null) {
+      return `<div class="south-cell south-empty"></div>`;
+    }
+    const signInfo = data.house_signs.find((item) => item.house === ((signIndex - ascSign + 12) % 12) + 1);
+    const planets = bySign[signIndex] || [];
+    const lagnaMark = signIndex === ascSign ? " lagna" : "";
+    const houseLabel = signInfo ? `H${signInfo.house}` : "";
+    return `<div class="south-cell${lagnaMark}">
+      <div class="house-num">${houseLabel}</div>
+      <div class="sign-name">${escapeHtml(signInfo?.sign || "")}</div>
+      <div class="planet-list">${planets.map(escapeHtml).join(", ")}</div>
+    </div>`;
+  });
+  return `<div class="south-grid" aria-label="South Indian style birth chart">
+    ${cells.join("")}
+  </div>`;
+}
+
+function renderWheelChart(data) {
+  const planets = Object.entries(data.planets).map(([name, planet]) => ({
+    name,
+    sign: planet.sign,
+    signIndex: planet.sign_index,
+    longitude: planet.longitude,
+    degree: planet.degree_in_sign,
+  }));
+  const segments = [];
+  for (let offset = 0; offset < 12; offset += 1) {
+    const startDeg = (offset * 30).toFixed(2);
+    const ringPlanets = planets
+      .filter((planet) => planet.signIndex === offset)
+      .map((planet) => `${escapeHtml(planet.name)} ${planet.degree.toFixed(1)}°`)
+      .join("<br>");
+    segments.push(`<div class="wheel-segment${offset === data.ascendant.sign_index ? " asc" : ""}" style="--segment:${offset};">
+      <span class="wheel-label">${escapeHtml(zodiacSigns[offset])}</span>
+      <span class="wheel-degree">${startDeg}°</span>
+      <span class="wheel-planets">${ringPlanets}</span>
+    </div>`);
+  }
+  return `<div class="wheel-chart" aria-label="360 degree zodiac chart">
+    <div class="wheel-core">
+      <strong>${escapeHtml(data.ascendant.sign)}</strong>
+      <span>Lagna</span>
+    </div>
+    ${segments.join("")}
   </div>`;
 }
 
