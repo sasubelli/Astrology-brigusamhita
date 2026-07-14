@@ -79,7 +79,8 @@ def answer_chat(
     topic = _classify_topic(q)
     plan = _build_plan(topic, chart, history or [])
     payload = _extract_chart_payload(chart or {})
-    sources = retrieve_bphs_context(question)
+    retrieval_query = _build_retrieval_query(question, topic, payload)
+    sources = retrieve_bphs_context(retrieval_query)
 
     local_model = _run_local_model(question, resolved_language, chart, plan, payload, history or [], sources)
     if local_model:
@@ -95,6 +96,7 @@ def answer_chat(
             + "; ".join(str(source["citation"]) for source in sources)
             + "."
         )
+        answer_lines.append(_retrieval_summary_line(resolved_language, sources))
     answer_lines.append(_divisional_summary_line(resolved_language, payload, topic))
     answer_lines.append(lang["closing"])
 
@@ -154,6 +156,37 @@ def _build_plan(topic: str, chart: dict[str, Any] | None, history: list[dict[str
     if history:
         plan.append("Use the conversation history to preserve context from earlier questions.")
     return plan
+
+
+def _build_retrieval_query(question: str, topic: str, payload: dict[str, Any]) -> str:
+    anchors = [question, topic]
+    asc = payload.get("ascendant", {})
+    moon = payload.get("moon", {})
+    dasha = payload.get("dasha_lord", "")
+    if asc.get("sign"):
+        anchors.append(asc["sign"])
+    if asc.get("sign_sanskrit"):
+        anchors.append(asc["sign_sanskrit"])
+    if moon.get("nakshatra"):
+        anchors.append(moon["nakshatra"])
+    if moon.get("sign"):
+        anchors.append(moon["sign"])
+    if dasha:
+        anchors.append(dasha)
+    topic_terms = {
+        "lagna": "ascendant lagna first house body life",
+        "moon": "Moon mind nakshatra emotional",
+        "dasha": "vimshottari mahadasha antardasha timing",
+        "marriage": "marriage spouse seventh house relationship",
+        "career": "career profession tenth house work",
+        "children": "children progeny fifth house merit",
+        "wealth": "wealth income second house eleventh house",
+        "health": "health disease sixth house recovery",
+        "remedy": "remedy prayer charity karma",
+        "spiritual": "dharma moksha ninth house twelfth house",
+    }.get(topic, "vedic astrology house lord planet prediction")
+    anchors.append(topic_terms)
+    return " ".join(part for part in anchors if part)
 
 
 def _contains_script(text: str, language: str) -> bool:
@@ -347,6 +380,7 @@ def _build_model_prompt(
         "history": history[-6:],
         "chart": chart_summary,
         "retrieved_bphs_context": format_retrieval_context(sources),
+        "retrieval_instructions": "Use the retrieved excerpts as the RAG context. Prefer them over memory. Quote or paraphrase only what appears in the excerpts and keep the answer grounded in the chart.",
     }
     return json.dumps(instruction, ensure_ascii=False, indent=2)
 
@@ -492,6 +526,20 @@ def _chart_note(language: str, chart_name: str, chart: dict[str, Any], meaning: 
         "te": f"{chart_name} ను {meaning} కోసం ఉపయోగిస్తాం. Current divisional ascendant: {asc_label}; ఆ division లో చంద్రుడు {moon_house_label}వ భావంలో ఉన్నాడు ({moon_label}).",
         "ta": f"{chart_name} என்பது {meaning}க்காகப் பயன்படுத்தப்படுகிறது. Current divisional ascendant: {asc_label}; அந்த division-இல் சந்திரன் {moon_house_label}-ஆம் பாவத்தில் உள்ளது ({moon_label}).",
     }.get(language, f"{chart_name} is used for {meaning}. Current divisional ascendant: {asc_label}; Moon falls in house {moon_house_label} in that division ({moon_label}).")
+
+
+def _retrieval_summary_line(language: str, sources: list[dict[str, object]]) -> str:
+    if not sources:
+        return ""
+    first = sources[0]
+    source_name = first.get("source", "reference")
+    citation = first.get("citation", "reference")
+    return {
+        "en": f"RAG context from {source_name} ({citation}) was used to ground this answer.",
+        "hi": f"इस उत्तर को आधार देने के लिए {source_name} ({citation}) से RAG context लिया गया।",
+        "te": f"ఈ సమాధానాన్ని ఆధారపరచడానికి {source_name} ({citation}) నుండి RAG context ఉపయోగించబడింది.",
+        "ta": f"இந்த பதிலை அடிப்படையாக்க {source_name} ({citation}) இலிருந்து RAG context பயன்படுத்தப்பட்டது.",
+    }.get(language, f"RAG context from {source_name} ({citation}) was used to ground this answer.")
 
 
 def _house_focus(language: str, payload: dict[str, Any], chart: dict[str, Any], house: int, chart_name: str, meaning: str) -> str:

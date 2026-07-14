@@ -83,9 +83,10 @@ def _load_corpus() -> tuple[SourceChunk, ...]:
     try:
         from pypdf import PdfReader
     except ImportError:
-        return tuple()
+        return _load_corpus_from_raw_pdf_bytes()
 
     files = (
+        ("Bhrigu Samhita Tmrao", REFERENCE_DIR / "bhrigu-samhita-tmrao.pdf"),
         ("BPHS (R. Santhanam, complete edition)", REFERENCE_DIR / "bphs-complete-r-santhanam.pdf"),
         ("BPHS Volume 2 (R. Santhanam)", REFERENCE_DIR / "bphs-volume-2-r-santhanam.pdf"),
     )
@@ -102,6 +103,32 @@ def _load_corpus() -> tuple[SourceChunk, ...]:
                 terms = Counter(_tokens(part))
                 if terms:
                     chunks.append(SourceChunk(title, page_number, part, terms))
+    return tuple(chunks)
+
+
+def _load_corpus_from_raw_pdf_bytes() -> tuple[SourceChunk, ...]:
+    """Fallback when no PDF parser is installed.
+
+    This does not perform full text extraction; it only indexes any readable
+    Latin text embedded in the file bytes. It is intentionally conservative so
+    we do not invent passages when no parser is available.
+    """
+    chunks: list[SourceChunk] = []
+    for title, path in (
+        ("Bhrigu Samhita Tmrao", REFERENCE_DIR / "bhrigu-samhita-tmrao.pdf"),
+        ("BPHS (R. Santhanam, complete edition)", REFERENCE_DIR / "bphs-complete-r-santhanam.pdf"),
+        ("BPHS Volume 2 (R. Santhanam)", REFERENCE_DIR / "bphs-volume-2-r-santhanam.pdf"),
+    ):
+        if not path.exists():
+            continue
+        raw = path.read_bytes()
+        text = _normalise(_extract_ascii_text(raw))
+        if not text:
+            continue
+        for part in _chunk_text(text):
+            terms = Counter(_tokens(part))
+            if terms:
+                chunks.append(SourceChunk(title, 1, part, terms))
     return tuple(chunks)
 
 
@@ -123,6 +150,22 @@ def _tokens(text: str) -> list[str]:
 
 def _clean_excerpt(text: str) -> str:
     return text[:700].rstrip(" ,;:") + ("..." if len(text) > 700 else "")
+
+
+def _extract_ascii_text(blob: bytes, min_run: int = 4) -> str:
+    runs: list[str] = []
+    current: list[str] = []
+    for byte in blob:
+        char = chr(byte)
+        if 32 <= byte <= 126:
+            current.append(char)
+        else:
+            if len(current) >= min_run:
+                runs.append("".join(current))
+            current = []
+    if len(current) >= min_run:
+        runs.append("".join(current))
+    return " ".join(runs)
 
 
 def _expand_query(terms: list[str]) -> list[str]:
