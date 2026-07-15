@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class BirthRequest(BaseModel):
-    name: str = Field(default="Native", max_length=80)
+    name: str = Field(default="Name", max_length=80)
     date: str = Field(description="Birth date in YYYY-MM-DD format")
     time: str = Field(description="Birth time in HH:MM or HH:MM:SS local time")
     place: str | None = Field(default=None, max_length=120)
