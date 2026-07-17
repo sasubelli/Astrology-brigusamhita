@@ -1,4 +1,4 @@
-"""FastAPI app for the Bhrigu Samhita Jyotisha Lab."""
+"""FastAPI app for the Bhrigu Samhita Astro Lab."""
 
 from __future__ import annotations
 
