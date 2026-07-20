@@ -1,4 +1,4 @@
-"""FastAPI app for the Bhrigu Samhita Astro Lab."""
+"""FastAPI app for the Bhrigu Samhita Astrology Lab."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
 app = FastAPI(
-    title="Bhrigu Samhita Jyotisha Lab",
+    title="Bhrigu Samhita Astrology Lab",
     version="0.1.0",
     description="Sidereal Vedic astrology readings with Vimshottari dasha timing.",
 )

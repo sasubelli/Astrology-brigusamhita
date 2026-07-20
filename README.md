@@ -12,7 +12,28 @@ A local Vedic astrology project for generating a structured birth reading from d
 
 This project is meant for spiritual, cultural, and reflective astrology use. It should not be used as medical, legal, financial, or safety-critical advice.
 
-## Quick Start
+## Java Quick Start
+
+The current backend is available as a dependency-free Java application. Its
+calculation engine represents all numeric calculation values as `BigDecimal`;
+it does not use Java `double` or `float` values.
+
+```bash
+mvn package
+java -cp target/classes com.bhrigusamhita.JyotishaApplication 8080
+```
+
+Open http://127.0.0.1:8080. The Java API keeps the browser endpoints and also
+exposes tool-oriented endpoints for an AI orchestrator:
+
+- `POST /api/v1/chart/birth-data`
+- `POST /api/v1/dasha/current`
+- `POST /api/v1/transits/active` (optional `planet`, defaults to Saturn)
+
+The legacy Python implementation remains in `app/` temporarily as a reference
+during migration.
+
+## Legacy Python Quick Start
 
 ```bash
 python3 -m venv .venv

@@ -160,6 +160,11 @@ function renderReport(data) {
     </section>
 
     <section class="section">
+      <h2>Lagna, Navamsa & Arudha Charts</h2>
+      <div class="area-grid">${renderSpecialCharts(data.divisional_charts)}</div>
+    </section>
+
+    <section class="section">
       <h2>Yogas</h2>
       <div class="yoga-grid">${data.yogas
         .map((yoga) => miniCard(yoga.name, yoga.reading, `Strength: ${yoga.strength}`))
@@ -181,7 +186,7 @@ function renderReport(data) {
     </section>
 
     <section class="section">
-      <h2>10-Year Monthly Forecast</h2>
+      <h2>2-Year Monthly Forecast</h2>
       <div class="monthly-grid">${data.monthly_timeline.map(renderMonthlyForecast).join("")}</div>
     </section>
 
@@ -337,6 +342,21 @@ function renderPlanetTable(planets) {
     <thead><tr><th>Planet</th><th>Sign</th><th>Degree</th><th>Nakshatra</th><th>House</th><th>Dignity</th><th>Retro</th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
+}
+
+function renderSpecialCharts(charts) {
+  if (!charts || typeof charts !== "object") return "";
+  const d1 = charts.d1;
+  const d9 = charts.d9;
+  const arudha = charts.arudha;
+  const compact = (chart) => Object.entries(chart?.planets || {})
+    .map(([name, point]) => `${escapeHtml(name)}: ${escapeHtml(point.sign)} (H${escapeHtml(point.house)})`)
+    .join("<br>");
+  return [
+    d1 && miniCard(d1.label, `<strong>Ascendant:</strong> ${escapeHtml(d1.ascendant)}<br><br>${compact(d1)}`),
+    d9 && miniCard(d9.label, `<strong>Navamsa Ascendant:</strong> ${escapeHtml(d9.ascendant)}<br><br>${compact(d9)}`),
+    arudha && miniCard(arudha.label, `<strong>A1:</strong> ${escapeHtml(arudha.sign)} (${escapeHtml(arudha.sign_sanskrit)})<br><br>Lagna lord ${escapeHtml(arudha.lord)} is in ${escapeHtml(arudha.lord_sign)}.`),
+  ].filter(Boolean).join("");
 }
 
 function renderTimeline(period) {
